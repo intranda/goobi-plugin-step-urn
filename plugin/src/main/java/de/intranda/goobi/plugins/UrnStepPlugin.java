@@ -1,5 +1,7 @@
 package de.intranda.goobi.plugins;
 
+import java.io.IOException;
+
 /**
  * This file is part of a plugin for Goobi - a Workflow tool for the support of mass digitization.
  *
@@ -30,9 +32,19 @@ import org.goobi.production.enums.StepReturnValue;
 import org.goobi.production.plugin.interfaces.IStepPluginVersion2;
 
 import de.sub.goobi.config.ConfigPlugins;
+import de.sub.goobi.helper.exceptions.DAOException;
+import de.sub.goobi.helper.exceptions.SwapException;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import net.xeoh.plugins.base.annotations.PluginImplementation;
+import ugh.dl.DocStruct;
+import ugh.dl.Fileformat;
+import ugh.dl.Metadata;
+import ugh.dl.Prefs;
+import ugh.exceptions.MetadataTypeNotAllowedException;
+import ugh.exceptions.PreferencesException;
+import ugh.exceptions.ReadException;
+import ugh.exceptions.WriteException;
 
 @PluginImplementation
 @Log4j2
@@ -42,10 +54,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
     private String title = "intranda_step_urn";
     @Getter
     private Step step;
-    @Getter
-    private String value;
-    @Getter 
-    private boolean allowTaskFinishButtons;
+    private String metadataType;
     private String returnPath;
 
     @Override
@@ -55,17 +64,13 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                 
         // read parameters from correct block in configuration file
         SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
-        value = myconfig.getString("value", "default value"); 
-        allowTaskFinishButtons = myconfig.getBoolean("allowTaskFinishButtons", false);
+        metadataType = myconfig.getString("metadataType", "_urn"); 
         log.info("Urn step plugin initialized");
     }
 
     @Override
     public PluginGuiType getPluginGuiType() {
-        return PluginGuiType.FULL;
-        // return PluginGuiType.PART;
-        // return PluginGuiType.PART_AND_FULL;
-        // return PluginGuiType.NONE;
+        return PluginGuiType.NONE;
     }
 
     @Override
@@ -107,7 +112,39 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
     @Override
     public PluginReturnValue run() {
         boolean successful = true;
-        // your logic goes here
+        boolean foundExistingUrn = false;
+        
+        try {
+            // read mets file
+            Fileformat ff = step.getProzess().readMetadataFile();
+            Prefs prefs = step.getProzess().getRegelsatz().getPreferences();
+            DocStruct logical = ff.getDigitalDocument().getLogicalDocStruct();
+            if (logical.getType().isAnchor()) {
+                logical = logical.getAllChildren().get(0);
+            }
+            
+            // find existing URNs (to actually do nothing
+            for (Metadata md : logical.getAllMetadata()) {
+                if (md.getType().getName().equals(metadataType)) {
+                	foundExistingUrn = true;
+                    String myUpdatedUrnValue = "ABCDEF";
+                    md.setValue(myUpdatedUrnValue);
+                } 
+            }
+            
+            //if no URNs found yet register a new one
+            if (!foundExistingUrn) {
+            	Metadata md = new Metadata(prefs.getMetadataTypeByName(metadataType));
+	        	String myNewUrn = "ZYXWVU";
+	        	md.setValue(myNewUrn);
+	        	logical.addMetadata(md);            	
+            }
+            
+            // save the mets file
+            step.getProzess().writeMetadataFile(ff);
+        } catch (ReadException | PreferencesException | WriteException | IOException | InterruptedException | SwapException | DAOException | MetadataTypeNotAllowedException e) {
+            log.error(e);
+        }
         
         log.info("Urn step plugin executed");
         if (!successful) {

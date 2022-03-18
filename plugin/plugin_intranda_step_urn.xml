@@ -13,9 +13,7 @@
         <step>*</step>
         
         <!-- sample parameter -->
-        <value>test</value>
-        <!-- display button to finish the task directly from within the entered plugin -->
-        <allowTaskFinishButtons>true</allowTaskFinishButtons>
+        <metadataType>_urn</metadataType>
     </config>
 
 </config_plugin>
