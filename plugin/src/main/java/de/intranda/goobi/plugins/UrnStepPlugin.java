@@ -64,7 +64,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                 
         // read parameters from correct block in configuration file
         SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
-        metadataType = myconfig.getString("metadataType", "_urn"); 
+        metadataType = myconfig.getString("metadataType", "_ark"); 
         log.info("Urn step plugin initialized");
     }
 
