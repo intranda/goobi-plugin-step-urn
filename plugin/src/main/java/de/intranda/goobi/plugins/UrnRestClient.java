@@ -2,26 +2,29 @@
 package de.intranda.goobi.plugins;
 
 import java.io.IOException;
-import java.io.StringWriter;
-import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Base64;
-
-import javax.json.Json;
-import javax.json.JsonArrayBuilder;
-import javax.json.JsonException;
-import javax.json.JsonObjectBuilder;
 
 import org.apache.http.HttpHeaders;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.fluent.Request;
 import org.apache.http.entity.ContentType;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+
+import de.intranda.goobi.plugins.Messages.UrlListMessage;
+import de.intranda.goobi.plugins.Messages.UrnCreationMessage;
+import de.intranda.goobi.plugins.ResponseHandler.CreateResponseHandler;
+import de.intranda.goobi.plugins.ResponseHandler.PatchResponseHandler;
+import de.intranda.goobi.plugins.ResponseHandler.SuggestionResponseHandler;
+
 public class UrnRestClient {
 
 	private String uri;
 	private String auth;
 	private String namespaceName;
+	private Gson gson;
 
 	/**
 	 * @param Uri       URL of the URN servcce
@@ -35,6 +38,7 @@ public class UrnRestClient {
 			throw new IllegalArgumentException("Bad URL - only https is permitted");
 		uri = (!Uri.endsWith("/")) ? Uri + "/" : Uri;
 		this.namespaceName = Namespace.trim();
+		gson = new Gson();
 	}
 
 	/**
@@ -46,9 +50,10 @@ public class UrnRestClient {
 	 * @throws IOException
 	 * @throws IllegalArgumentException
 	 */
-	private String getUrnSuggestion() throws ClientProtocolException, IOException, IllegalArgumentException, JsonException {
+	private String getUrnSuggestion()
+			throws ClientProtocolException, IOException, IllegalArgumentException, JsonSyntaxException {
 
-		Request request = Request.Post(uri + "/v2/namespaces/name/" + namespaceName + "/urn-suggestion");
+		Request request = Request.Get(uri + "namespaces/name/" + namespaceName + "/urn-suggestion");
 		request = addHeaders(request);
 
 		String response = request.execute().handleResponse(new SuggestionResponseHandler());
@@ -66,15 +71,13 @@ public class UrnRestClient {
 	 * @throws IllegalArgumentException
 	 */
 	public String createUrn(ArrayList<String> urls)
-			throws ClientProtocolException, IOException, IllegalArgumentException, JsonException {
+			throws ClientProtocolException, IOException, IllegalArgumentException, JsonSyntaxException {
 		String urn = getUrnSuggestion();
 		Request request = Request.Post(uri + "urns");
 		request = addHeaders(request);
 		String response = request.addHeader("Content-Type", "application/json")
 				.bodyString(createUrnBodyString(urn, urls), ContentType.APPLICATION_JSON).execute()
 				.handleResponse(new CreateResponseHandler());
-
-		// TODO new Response Handling
 		return response;
 	}
 
@@ -89,7 +92,7 @@ public class UrnRestClient {
 	 * @throws IllegalArgumentException
 	 */
 	public boolean replaceUrls(String Urn, ArrayList<String> urls)
-			throws ClientProtocolException, IOException, IllegalArgumentException, JsonException {
+			throws ClientProtocolException, IOException, IllegalArgumentException, JsonSyntaxException {
 
 		Request request = Request.Patch(uri + "urns/urn/" + Urn + "/" + "my-urls");
 		request = addHeaders(request);
@@ -107,10 +110,8 @@ public class UrnRestClient {
 	 * @return String with JSONarray
 	 */
 	private String replaceUrlsBodyString(ArrayList<String> urls) {
-		JsonArrayBuilder arrayBuilder = createUrlArray(urls);
-		Writer writer = new StringWriter();
-		Json.createWriter(writer).write(arrayBuilder.build());
-		return writer.toString();
+		ArrayList<UrlListMessage> ulm = createUrlList(urls);
+		return gson.toJson(ulm);
 	}
 
 	/**
@@ -119,12 +120,13 @@ public class UrnRestClient {
 	 * @param urls urls to put in the array
 	 * @return arrayBuilder object
 	 */
-	private JsonArrayBuilder createUrlArray(ArrayList<String> urls) {
-		JsonArrayBuilder arrayBuilder = Json.createArrayBuilder();
+	private ArrayList<UrlListMessage> createUrlList(ArrayList<String> urls) {
+		ArrayList<UrlListMessage> ulm = new ArrayList<UrlListMessage>();
 		for (String url : urls) {
-			arrayBuilder.add(Json.createObjectBuilder().add("url", url));
+			// Method Chaining
+			ulm.add(new UrlListMessage().setUrl(url));
 		}
-		return arrayBuilder;
+		return ulm;
 	}
 
 	/**
@@ -136,16 +138,11 @@ public class UrnRestClient {
 	 * @throws IOException
 	 */
 	private String createUrnBodyString(String Urn, ArrayList<String> urls) throws IOException {
-		JsonObjectBuilder objectBuilder = Json.createObjectBuilder();
-		JsonArrayBuilder arrayBuilder = createUrlArray(urls);
-		// add Values to JsonObject
-		objectBuilder.add("urn", Urn);
-		objectBuilder.add("urls", arrayBuilder);
-
-		Writer writer = new StringWriter();
-		Json.createWriter(writer).write(objectBuilder.build());
-
-		return writer.toString();
+		UrnCreationMessage createArk = new UrnCreationMessage();
+		ArrayList<UrlListMessage> ulm = new ArrayList<UrlListMessage>();
+		createArk.setUrn(Urn);
+		createArk.setUrls(createUrlList(urls));
+		return gson.toJson(createArk);
 	}
 
 	/**

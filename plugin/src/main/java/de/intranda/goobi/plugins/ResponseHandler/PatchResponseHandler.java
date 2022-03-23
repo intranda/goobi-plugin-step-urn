@@ -1,4 +1,4 @@
-package de.intranda.goobi.plugins;
+package de.intranda.goobi.plugins.ResponseHandler;
 
 import java.io.IOException;
 

@@ -154,10 +154,10 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                     String existingUrn = md.getValue();
                     successful = urnClient.replaceUrls(existingUrn,urls);
 					if (!successful)
-						Helper.addMessageToProcessLog(step.getProcessId(),LogType.ERROR,"URN: "+ existingUrn + "could not be updated!");
+						Helper.addMessageToProcessLog(step.getProcessId(),LogType.ERROR,"URN: "+ existingUrn + " could not be updated!");
 					else 
 					{
-						Helper.addMessageToProcessLog(step.getProcessId(),LogType.INFO,"URN: "+ existingUrn + "was updated sucecssfully!");
+						Helper.addMessageToProcessLog(step.getProcessId(),LogType.INFO,"URN: "+ existingUrn + " was updated sucecssfully!");
 					}
                 } 
             }
@@ -168,7 +168,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
             	String myNewUrn = urnClient.createUrn(urls);
 	        	md.setValue(myNewUrn);
 	        	logical.addMetadata(md);
-	        	Helper.addMessageToProcessLog(step.getProcessId(),LogType.INFO,"URN: " + myNewUrn + "was created successfully!" );
+	        	Helper.addMessageToProcessLog(step.getProcessId(),LogType.INFO,"URN: " + myNewUrn + " was created successfully!" );
 				
 				// save the mets file
 				step.getProzess().writeMetadataFile(ff);
@@ -181,7 +181,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
         }
         
         log.info("URN step plugin executed");
-        Helper.addMessageToProcessLog(step.getProcessId(),LogType.INFO, "URN step plugin executed");
+        Helper.addMessageToProcessLog(step.getProcessId(),LogType.INFO, successful ? "URN step plugin executed successfully": "URN step plugin executed successfully with Errors");
         if (!successful) {
             return PluginReturnValue.ERROR;
         }

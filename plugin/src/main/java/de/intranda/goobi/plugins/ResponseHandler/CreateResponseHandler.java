@@ -1,4 +1,4 @@
-package de.intranda.goobi.plugins;
+package de.intranda.goobi.plugins.ResponseHandler;
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -13,10 +13,14 @@ import org.apache.http.HttpResponse;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.util.EntityUtils;
 
+import com.google.gson.JsonSyntaxException;
+
+import de.intranda.goobi.plugins.Messages.UrnCreationSuccessfulMessage;
+
 public class CreateResponseHandler extends UrnResponseHandler {
 	
 	@Override
-	public  String handleResponse(HttpResponse response) throws ClientProtocolException, IOException, JsonException{
+	public  String handleResponse(HttpResponse response) throws ClientProtocolException, IOException, JsonSyntaxException {
 		initialize(response);
 		
 		if (status >= 200 && status < 300) {
@@ -25,9 +29,8 @@ public class CreateResponseHandler extends UrnResponseHandler {
 			} else {
 				//TODO parse JSON
 				String jsonString = EntityUtils.toString(entity, Charset.forName("utf-8"));
-				JsonReader reader = Json.createReader(new StringReader(jsonString));
-				JsonObject jsonObject= reader.readObject();
-				return jsonObject.getString("urn");
+				UrnCreationSuccessfulMessage successful = gson.fromJson(jsonString, UrnCreationSuccessfulMessage.class);
+				return successful.getUrn();
 			}
 		} else {
 			handleErrorStates();
