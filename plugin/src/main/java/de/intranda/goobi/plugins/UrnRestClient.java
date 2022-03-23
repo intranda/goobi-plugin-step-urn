@@ -9,6 +9,7 @@ import java.util.Base64;
 
 import javax.json.Json;
 import javax.json.JsonArrayBuilder;
+import javax.json.JsonException;
 import javax.json.JsonObjectBuilder;
 
 import org.apache.http.HttpHeaders;
@@ -45,7 +46,7 @@ public class UrnRestClient {
 	 * @throws IOException
 	 * @throws IllegalArgumentException
 	 */
-	private String getUrnSuggestion() throws ClientProtocolException, IOException, IllegalArgumentException {
+	private String getUrnSuggestion() throws ClientProtocolException, IOException, IllegalArgumentException, JsonException {
 
 		Request request = Request.Post(uri + "/v2/namespaces/name/" + namespaceName + "/urn-suggestion");
 		request = addHeaders(request);
@@ -65,7 +66,7 @@ public class UrnRestClient {
 	 * @throws IllegalArgumentException
 	 */
 	public String createUrn(ArrayList<String> urls)
-			throws ClientProtocolException, IOException, IllegalArgumentException {
+			throws ClientProtocolException, IOException, IllegalArgumentException, JsonException {
 		String urn = getUrnSuggestion();
 		Request request = Request.Post(uri + "urns");
 		request = addHeaders(request);
@@ -88,7 +89,7 @@ public class UrnRestClient {
 	 * @throws IllegalArgumentException
 	 */
 	public boolean replaceUrls(String Urn, ArrayList<String> urls)
-			throws ClientProtocolException, IOException, IllegalArgumentException {
+			throws ClientProtocolException, IOException, IllegalArgumentException, JsonException {
 
 		Request request = Request.Patch(uri + "urns/urn/" + Urn + "/" + "my-urls");
 		request = addHeaders(request);
@@ -100,7 +101,7 @@ public class UrnRestClient {
 
 	/**
 	 * Helper method of replaceUrls. It creates a JSONArray String of Objects with
-	 * the Paraneter url
+	 * the Parameter url
 	 * 
 	 * @param urls urls that shall be added to the JSONArray
 	 * @return String with JSONarray

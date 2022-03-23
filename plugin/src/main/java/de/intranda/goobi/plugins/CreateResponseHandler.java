@@ -5,6 +5,7 @@ import java.io.StringReader;
 import java.nio.charset.Charset;
 
 import javax.json.Json;
+import javax.json.JsonException;
 import javax.json.JsonObject;
 import javax.json.JsonReader;
 
@@ -15,7 +16,7 @@ import org.apache.http.util.EntityUtils;
 public class CreateResponseHandler extends UrnResponseHandler {
 	
 	@Override
-	public  String handleResponse(HttpResponse response) throws ClientProtocolException, IOException {
+	public  String handleResponse(HttpResponse response) throws ClientProtocolException, IOException, JsonException{
 		initialize(response);
 		
 		if (status >= 200 && status < 300) {

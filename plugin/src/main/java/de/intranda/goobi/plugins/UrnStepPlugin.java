@@ -24,6 +24,8 @@ import java.util.ArrayList;
 
 import java.util.HashMap;
 
+import javax.json.JsonException;
+
 import org.apache.commons.configuration.SubnodeConfiguration;
 import org.goobi.beans.Step;
 import org.goobi.production.enums.LogType;
@@ -173,7 +175,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
 				successful=true;
             }
             
-        } catch (ReadException | PreferencesException | WriteException | IOException | IllegalArgumentException | InterruptedException | SwapException | DAOException | MetadataTypeNotAllowedException e) {
+        } catch (ReadException | JsonException | PreferencesException | WriteException | IOException | IllegalArgumentException | InterruptedException | SwapException | DAOException | MetadataTypeNotAllowedException e) {
             log.error(e);
             Helper.addMessageToProcessLog(step.getProcessId(),LogType.ERROR, e.getMessage());
         }
