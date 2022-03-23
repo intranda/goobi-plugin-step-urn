@@ -26,7 +26,7 @@ public abstract class UrnResponseHandler implements ResponseHandler<String> {
 	@Override
 	public abstract String handleResponse(HttpResponse response)throws ClientProtocolException, IOException;
 	
-	protected void handleErrorStates() {
+	protected void handleErrorStates() throws ClientProtocolException, IOException {
 		if (status == 400) {
 			JsonObject jsonObject = null;
 			if (entity != null) {
@@ -39,4 +39,4 @@ public abstract class UrnResponseHandler implements ResponseHandler<String> {
 		} else
 			throw new ClientProtocolException(status + ": reason-> " + " unhandled error");
 	}
-}}
+}

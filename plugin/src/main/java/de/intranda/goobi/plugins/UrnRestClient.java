@@ -33,7 +33,7 @@ public class UrnRestClient {
 		if (!Uri.startsWith("https"))
 			throw new IllegalArgumentException("Bad URL - only https is permitted");
 		uri = (!Uri.endsWith("/")) ? Uri + "/" : Uri;
-		this.namespaceName = Namespace;
+		this.namespaceName = Namespace.trim();
 	}
 
 	/**

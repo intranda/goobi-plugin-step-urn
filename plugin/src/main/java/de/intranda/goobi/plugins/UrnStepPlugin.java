@@ -1,6 +1,7 @@
 package de.intranda.goobi.plugins;
 
 import java.io.IOException;
+import java.util.ArrayList;
 
 /**
  * This file is part of a plugin for Goobi - a Workflow tool for the support of mass digitization.
@@ -25,6 +26,7 @@ import java.util.HashMap;
 
 import org.apache.commons.configuration.SubnodeConfiguration;
 import org.goobi.beans.Step;
+import org.goobi.production.enums.LogType;
 import org.goobi.production.enums.PluginGuiType;
 import org.goobi.production.enums.PluginReturnValue;
 import org.goobi.production.enums.PluginType;
@@ -32,6 +34,8 @@ import org.goobi.production.enums.StepReturnValue;
 import org.goobi.production.plugin.interfaces.IStepPluginVersion2;
 
 import de.sub.goobi.config.ConfigPlugins;
+import de.sub.goobi.helper.Helper;
+import de.sub.goobi.helper.VariableReplacer;
 import de.sub.goobi.helper.exceptions.DAOException;
 import de.sub.goobi.helper.exceptions.SwapException;
 import lombok.Getter;
@@ -55,7 +59,12 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
     @Getter
     private Step step;
     private String metadataType;
+	private String uri;
+	private String namespace;
+	private String apiUser;
+	private String apiPassword;
     private String returnPath;
+    private String publicationUrl;
 
     @Override
     public void initialize(Step step, String returnPath) {
@@ -64,7 +73,15 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                 
         // read parameters from correct block in configuration file
         SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
-        metadataType = myconfig.getString("metadataType", "_ark"); 
+        metadataType = myconfig.getString("metadataType", "_ark");
+        
+        uri = myconfig.getString("uri", "http://example.com");
+		namespace = myconfig.getString("namespace", "xxx");
+		apiUser = myconfig.getString("apiUser", "Nutzer");
+		apiPassword = myconfig.getString("apiPassword", "Password");
+		
+		publicationUrl = myconfig.getString("publicationUrl", "http://example.com");
+		
         log.info("Urn step plugin initialized");
     }
 
@@ -111,14 +128,19 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
 
     @Override
     public PluginReturnValue run() {
-        boolean successful = true;
+        boolean successful = false;
         boolean foundExistingUrn = false;
         
         try {
+        	UrnRestClient urnClient = new UrnRestClient(uri, namespace, apiUser, apiPassword);
             // read mets file
             Fileformat ff = step.getProzess().readMetadataFile();
             Prefs prefs = step.getProzess().getRegelsatz().getPreferences();
             DocStruct logical = ff.getDigitalDocument().getLogicalDocStruct();
+            VariableReplacer replacer = new VariableReplacer(ff.getDigitalDocument(), prefs, step.getProzess(),step);
+            ArrayList<String> urls = new ArrayList<String>();
+            urls.add(replacer.replace(publicationUrl));
+            
             if (logical.getType().isAnchor()) {
                 logical = logical.getAllChildren().get(0);
             }
@@ -127,26 +149,37 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
             for (Metadata md : logical.getAllMetadata()) {
                 if (md.getType().getName().equals(metadataType)) {
                 	foundExistingUrn = true;
-                    String myUpdatedUrnValue = "ABCDEF";
-                    md.setValue(myUpdatedUrnValue);
+                    String existingUrn = md.getValue();
+                    successful = urnClient.replaceUrls(existingUrn,urls);
+					if (!successful)
+						Helper.addMessageToProcessLog(step.getProcessId(),LogType.ERROR,"URN: "+ existingUrn + "could not be updated!");
+					else 
+					{
+						Helper.addMessageToProcessLog(step.getProcessId(),LogType.INFO,"URN: "+ existingUrn + "was updated sucecssfully!");
+					}
                 } 
             }
             
             //if no URNs found yet register a new one
             if (!foundExistingUrn) {
             	Metadata md = new Metadata(prefs.getMetadataTypeByName(metadataType));
-	        	String myNewUrn = "ZYXWVU";
+            	String myNewUrn = urnClient.createUrn(urls);
 	        	md.setValue(myNewUrn);
-	        	logical.addMetadata(md);            	
+	        	logical.addMetadata(md);
+	        	Helper.addMessageToProcessLog(step.getProcessId(),LogType.INFO,"URN: " + myNewUrn + "was created successfully!" );
+				
+				// save the mets file
+				step.getProzess().writeMetadataFile(ff);
+				successful=true;
             }
             
-            // save the mets file
-            step.getProzess().writeMetadataFile(ff);
-        } catch (ReadException | PreferencesException | WriteException | IOException | InterruptedException | SwapException | DAOException | MetadataTypeNotAllowedException e) {
+        } catch (ReadException | PreferencesException | WriteException | IOException | IllegalArgumentException | InterruptedException | SwapException | DAOException | MetadataTypeNotAllowedException e) {
             log.error(e);
+            Helper.addMessageToProcessLog(step.getProcessId(),LogType.ERROR, e.getMessage());
         }
         
-        log.info("Urn step plugin executed");
+        log.info("URN step plugin executed");
+        Helper.addMessageToProcessLog(step.getProcessId(),LogType.INFO, "URN step plugin executed");
         if (!successful) {
             return PluginReturnValue.ERROR;
         }

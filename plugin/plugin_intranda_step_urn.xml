@@ -12,7 +12,22 @@
         <project>*</project>
         <step>*</step>
         
-        <!-- sample parameter -->
+        <!-- URI of the URN API, must use httos -->
+		<uri>https://api.nbn-resolving.org/sandbox/v2/</uri>
+
+		<!-- namespace in which new URNs shall be created -->
+		<namespace>urn:nbn:de:gbv:48</namespace>
+		
+		<!-- name of the API user -->
+		<apiUser>755040299</apiUser>
+
+		<!-- password of the API user -->
+		<apiPassword></apiPassword>
+
+		<!--target url URN will forward to -->
+		<publicationUrl>https://viewer.example.org/{meta.CatalogIDDigital}</publicationUrl>
+
+		<!--metadatatype in METS-File -->
         <metadataType>_urn</metadataType>
     </config>
 

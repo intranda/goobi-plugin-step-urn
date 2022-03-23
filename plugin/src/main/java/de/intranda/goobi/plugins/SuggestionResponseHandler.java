@@ -1,7 +1,5 @@
 package de.intranda.goobi.plugins;
 
-package de.intranda.goobi.plugins;
-
 import java.io.IOException;
 import java.io.StringReader;
 import java.nio.charset.Charset;
@@ -10,10 +8,8 @@ import javax.json.Json;
 import javax.json.JsonObject;
 import javax.json.JsonReader;
 
-import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.ClientProtocolException;
-import org.apache.http.client.ResponseHandler;
 import org.apache.http.util.EntityUtils;
 
 
