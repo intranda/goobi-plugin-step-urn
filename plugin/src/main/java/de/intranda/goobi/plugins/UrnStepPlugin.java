@@ -181,7 +181,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
         }
         
         log.info("URN step plugin executed");
-        Helper.addMessageToProcessLog(step.getProcessId(),LogType.INFO, successful ? "URN step plugin executed successfully": "URN step plugin executed successfully with Errors");
+        Helper.addMessageToProcessLog(step.getProcessId(),LogType.INFO, successful ? "URN step plugin executed successfully": "URN step plugin executed with Errors");
         if (!successful) {
             return PluginReturnValue.ERROR;
         }

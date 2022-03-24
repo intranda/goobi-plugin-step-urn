@@ -36,7 +36,7 @@ public abstract class UrnResponseHandler implements ResponseHandler<String> {
 			throws ClientProtocolException, IOException, JsonSyntaxException;
 
 	protected void handleErrorStates() throws ClientProtocolException, IOException {
-		if (status == 400 || status == 404 || status == 405) {
+		if (status > 400 && status <= 429) {
 
 			ErrorMessage error = null;
 			if (entity != null) {
