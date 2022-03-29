@@ -1,14 +1,12 @@
 package de.intranda.goobi.plugins.Messages;
 
-public class UrnCreationSuccessfulMessage {
 
+import lombok.Getter;
+import lombok.Setter;
+
+public class UrnCreationSuccessfulMessage {
+    @Getter
 	private String urn;
+    @Getter
 	private String created;
-	// the API Answer provides way more Details
-	public String getUrn() {
-		return urn;
-	}
-	public String getCreated() {
-		return created;
-	}
 }

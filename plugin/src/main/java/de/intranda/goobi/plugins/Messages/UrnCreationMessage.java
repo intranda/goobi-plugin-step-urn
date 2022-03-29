@@ -1,22 +1,15 @@
 package de.intranda.goobi.plugins.Messages;
 
 import java.util.ArrayList;
+import lombok.experimental.Accessors;
+import lombok.Getter;
+import lombok.Setter;
 
+@Accessors(chain = true)
 public class UrnCreationMessage {
-	private String urn;
-	private ArrayList<UrlListMessage> urls;
-	public ArrayList<UrlListMessage> getUrls() {
-		return urls;
-	}
-	public UrnCreationMessage setUrls(ArrayList<UrlListMessage> urls) {
-		this.urls = urls;
-		return this;
-	}
-	public String getUrn() {
-		return urn;
-	}
-	public UrnCreationMessage setUrn(String urn) {
-		this.urn = urn;
-		return this;
-	}
+    @Getter @Setter
+    private String urn;
+    @Getter @Setter
+    private ArrayList<UrlListMessage> urls;
+
 }
