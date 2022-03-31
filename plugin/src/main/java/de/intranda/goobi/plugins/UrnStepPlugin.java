@@ -67,6 +67,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
 	private String apiPassword;
     private String returnPath;
     private String publicationUrl;
+    private String infix;
 
     @Override
     public void initialize(Step step, String returnPath) {
@@ -83,6 +84,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
 		apiPassword = myconfig.getString("apiPassword", "Password");
 		
 		publicationUrl = myconfig.getString("publicationUrl", "http://example.com");
+		infix = myconfig.getString("infix", null);
 		
         log.info("Urn step plugin initialized");
     }
