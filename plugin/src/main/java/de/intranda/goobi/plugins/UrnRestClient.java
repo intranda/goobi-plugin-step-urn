@@ -70,15 +70,37 @@ public class UrnRestClient {
      * @throws ClientProtocolException
      * @throws IOException
      * @throws IllegalArgumentException
+     * @throws InterruptedException
      */
-    public String createUrn(ArrayList<String> urls) throws ClientProtocolException, IOException, IllegalArgumentException, JsonSyntaxException {
+    public String createUrn(ArrayList<String> urls)
+            throws ClientProtocolException, IOException, IllegalArgumentException, JsonSyntaxException, InterruptedException {
+
+        String response = null;
+        int tries =0;
         String urn = infix == null ? getUrnSuggestion() : UrnGenerator.generateUrn(namespaceName, infix);
-        Request request = Request.Post(uri + "urns");
-        request = addHeaders(request);
-        String response = request.addHeader("Content-Type", "application/json")
-                .bodyString(createUrnBodyString(urn, urls), ContentType.APPLICATION_JSON)
-                .execute()
-                .handleResponse(new CreateResponseHandler());
+        while (response == null && tries <3) {
+            Request request = Request.Post(uri + "urns");
+            request = addHeaders(request);
+
+            try {
+                response = request.addHeader("Content-Type", "application/json")
+                        .bodyString(createUrnBodyString(urn, urls), ContentType.APPLICATION_JSON)
+                        .execute()
+                        .handleResponse(new CreateResponseHandler());
+            } catch (ClientProtocolException ex) {
+                if (ex.getMessage().equals("409: reason-> Errorcode: 409: URN " + urn + " is already registered")) {
+                    String newUrn = UrnGenerator.generateUrn(urn, response);
+                    if (newUrn.equals(urn)) {
+                        Thread.sleep(2000);
+                        urn = UrnGenerator.generateUrn(urn, response);
+                    } else {
+                        urn = newUrn;
+                    }
+                    tries++;
+                } else
+                    throw ex;
+            }
+        }
         return response;
     }
 
