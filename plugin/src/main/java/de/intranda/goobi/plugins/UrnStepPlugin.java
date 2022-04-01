@@ -149,16 +149,17 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                 logical = logical.getAllChildren().get(0);
             }
 
-            // find existing URNs (to actually do nothing
+            // find existing URNs to replace URLs
             for (Metadata md : logical.getAllMetadata()) {
                 if (md.getType().getName().equals(metadataType)) {
                     foundExistingUrn = true;
                     String existingUrn = md.getValue();
                     successful = urnClient.replaceUrls(existingUrn, urls);
+
                     if (!successful)
                         Helper.addMessageToProcessLog(step.getProcessId(), LogType.ERROR, "URN: " + existingUrn + " could not be updated!");
                     else {
-                        Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO, "URN: " + existingUrn + " was updated sucecssfully!");
+                        Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO, "URN: " + existingUrn + " was updated successfully!");
                     }
                 }
             }

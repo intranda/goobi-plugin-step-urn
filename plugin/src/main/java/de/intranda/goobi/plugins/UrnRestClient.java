@@ -28,8 +28,9 @@ public class UrnRestClient {
     private Gson gson;
 
     /**
-     * @param Uri URL of the URN servcce
+     * @param Uri URL of the URN service
      * @param namespace namespace in which URNs are created
+     * @param infix infix the user can specify
      * @param User Username of the API User
      * @param Password Password of the User
      */
@@ -76,23 +77,22 @@ public class UrnRestClient {
             throws ClientProtocolException, IOException, IllegalArgumentException, JsonSyntaxException, InterruptedException {
 
         String response = null;
-        int tries =0;
+        int tries = 0;
         String urn = infix == null ? getUrnSuggestion() : UrnGenerator.generateUrn(namespaceName, infix);
-        while (response == null && tries <3) {
+        while (response == null && tries < 3) {
             Request request = Request.Post(uri + "urns");
             request = addHeaders(request);
-
             try {
                 response = request.addHeader("Content-Type", "application/json")
                         .bodyString(createUrnBodyString(urn, urls), ContentType.APPLICATION_JSON)
                         .execute()
                         .handleResponse(new CreateResponseHandler());
             } catch (ClientProtocolException ex) {
-                if (ex.getMessage().equals("409: reason-> Errorcode: 409: URN " + urn + " is already registered")) {
-                    String newUrn = UrnGenerator.generateUrn(urn, response);
+                if (ex.getMessage().equals("Errorcode: 409: URN " + urn + " is already registered")) {
+                    String newUrn = UrnGenerator.generateUrn(namespaceName, response);
                     if (newUrn.equals(urn)) {
                         Thread.sleep(2000);
-                        urn = UrnGenerator.generateUrn(urn, response);
+                        urn = UrnGenerator.generateUrn(namespaceName, response);
                     } else {
                         urn = newUrn;
                     }
@@ -101,6 +101,8 @@ public class UrnRestClient {
                     throw ex;
             }
         }
+        if (tries >= 3)
+            throw new ClientProtocolException("Error: Client tried 3 times to register an already existing URN");
         return response;
     }
 

@@ -1,13 +1,7 @@
 package de.intranda.goobi.plugins.ResponseHandler;
 
 import java.io.IOException;
-import java.io.StringReader;
 import java.nio.charset.Charset;
-
-import javax.json.Json;
-import javax.json.JsonException;
-import javax.json.JsonObject;
-import javax.json.JsonReader;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -55,9 +49,9 @@ public abstract class UrnResponseHandler implements ResponseHandler<String> {
                 String jsonString = EntityUtils.toString(entity, Charset.forName("utf-8"));
                 error = gson.fromJson(jsonString, ErrorMessage.class);
             }
-            throw new ClientProtocolException(status + ": reason-> " + error == null ? "no response body received"
+            throw new ClientProtocolException(error == null ? ("Error: "+ status + " -> no response body received")
                     : "Errorcode: " + error.getCode() + ": " + error.getDeveloperMessage());
         } else
-            throw new ClientProtocolException(status + ": reason-> " + " unhandled error");
+            throw new ClientProtocolException("Error: "+ status + ": reason-> " + " unhandled error");
     }
 }
