@@ -13,16 +13,22 @@
         <step>*</step>
         
         <!-- URI of the URN API, must use httos -->
-		<uri>https://api.nbn-resolving.org/sandbox/v2/</uri>
+		<uri>https://api.nbn-resolving.org/v2/</uri>
 
 		<!-- namespace in which new URNs shall be created -->
-		<namespace>urn:nbn:de:gbv:48</namespace>
+		<!-- example urn:nbn:de:gbv:NN -->
+		<namespace>urn:nbn:de:gbv:NN</namespace>
+		
+		<!-- infix that you want to use (optional) -->
+		<infix>goobi</infix>
+		
+		<!-- example URN urn:nbn:de:gbv:48-goobi-20220404122233 -->
 		
 		<!-- name of the API user -->
-		<apiUser>755040299</apiUser>
+		<apiUser>user</apiUser>
 
 		<!-- password of the API user -->
-		<apiPassword></apiPassword>
+		<apiPassword>password</apiPassword>
 
 		<!--target url URN will forward to -->
 		<publicationUrl>https://viewer.example.org/{meta.CatalogIDDigital}</publicationUrl>

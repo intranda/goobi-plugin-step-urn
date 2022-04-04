@@ -76,15 +76,15 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
 
         // read parameters from correct block in configuration file
         SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
-        metadataType = myconfig.getString("metadataType", "_ark");
+        metadataType = myconfig.getString("metadataType", "_urn");
 
-        uri = myconfig.getString("uri", "http://example.com");
-        namespace = myconfig.getString("namespace", "xxx");
-        apiUser = myconfig.getString("apiUser", "Nutzer");
-        apiPassword = myconfig.getString("apiPassword", "Password");
+        uri = myconfig.getString("uri", "https://api.nbn-resolving.org/v2/");
+        namespace = myconfig.getString("namespace", "urn:nbn:de:gbv:NN");
+        apiUser = myconfig.getString("apiUser", "user");
+        apiPassword = myconfig.getString("apiPassword", "password");
 
-        publicationUrl = myconfig.getString("publicationUrl", "http://example.com");
-        infix = myconfig.getString("infix", null);
+        publicationUrl = myconfig.getString("publicationUrl", "https://viewer.example.org/{meta.CatalogIDDigital}");
+        infix = myconfig.getString("infix");
 
         log.info("Urn step plugin initialized");
     }
@@ -141,7 +141,9 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
             Fileformat ff = step.getProzess().readMetadataFile();
             Prefs prefs = step.getProzess().getRegelsatz().getPreferences();
             DocStruct logical = ff.getDigitalDocument().getLogicalDocStruct();
+            // initialize VariableReplacer
             VariableReplacer replacer = new VariableReplacer(ff.getDigitalDocument(), prefs, step.getProzess(), step);
+            // create URL-List and add Value from Configuration
             ArrayList<String> urls = new ArrayList<String>();
             urls.add(replacer.replace(publicationUrl));
 
