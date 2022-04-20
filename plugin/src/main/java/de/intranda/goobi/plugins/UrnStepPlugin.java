@@ -23,10 +23,12 @@ import java.util.ArrayList;
  */
 
 import java.util.HashMap;
+import java.util.List;
 
 import javax.json.JsonException;
 
 import org.apache.commons.configuration.SubnodeConfiguration;
+import org.apache.http.client.ClientProtocolException;
 import org.goobi.beans.Step;
 import org.goobi.production.enums.LogType;
 import org.goobi.production.enums.PluginGuiType;
@@ -35,6 +37,9 @@ import org.goobi.production.enums.PluginType;
 import org.goobi.production.enums.StepReturnValue;
 import org.goobi.production.plugin.interfaces.IStepPluginVersion2;
 
+import com.google.gson.JsonSyntaxException;
+
+import de.intranda.ugh.extension.util.DocstructConfigurationItem;
 import de.sub.goobi.config.ConfigPlugins;
 import de.sub.goobi.helper.Helper;
 import de.sub.goobi.helper.VariableReplacer;
@@ -68,6 +73,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
     private String returnPath;
     private String publicationUrl;
     private String infix;
+    private String[] structElements;
 
     @Override
     public void initialize(Step step, String returnPath) {
@@ -76,13 +82,15 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
 
         // read parameters from correct block in configuration file
         SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
-        metadataType = myconfig.getString("metadataType", "_urn");
 
+        metadataType = myconfig.getString("metadataType", "_urn");
         uri = myconfig.getString("uri", "https://api.nbn-resolving.org/v2/");
         namespace = myconfig.getString("namespace", "urn:nbn:de:gbv:NN");
         apiUser = myconfig.getString("apiUser", "user");
         apiPassword = myconfig.getString("apiPassword", "password");
 
+        // Liste mit Stukturelementen einlesen
+        structElements = myconfig.getStringArray("structElements/structElement");
         publicationUrl = myconfig.getString("publicationUrl", "https://viewer.example.org/{meta.CatalogIDDigital}");
         infix = myconfig.getString("infix");
 
@@ -130,6 +138,39 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
         return ret != PluginReturnValue.ERROR;
     }
 
+    private boolean replaceUrlsOrAddUrn(ArrayList<String> urls, DocStruct logical, Prefs prefs, UrnRestClient urnClient, Fileformat ff)
+            throws JsonSyntaxException, ClientProtocolException, IllegalArgumentException, MetadataTypeNotAllowedException, IOException, InterruptedException, WriteException, PreferencesException, SwapException, DAOException {
+
+        boolean foundExistingUrn = false;
+        boolean successful = false;
+        for (Metadata md : logical.getAllMetadata()) {
+            if (md.getType().getName().equals(metadataType)) {
+                foundExistingUrn = true;
+                String existingUrn = md.getValue();
+                successful = urnClient.replaceUrls(existingUrn, urls);
+
+                if (!successful)
+                    Helper.addMessageToProcessLog(step.getProcessId(), LogType.ERROR, "URN: " + existingUrn + " could not be updated!");
+                else {
+                    Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO, "URN: " + existingUrn + " was updated successfully!");
+                }
+            }
+        }
+        //if no URNs found yet register a new one
+        if (!foundExistingUrn) {
+            Metadata md = new Metadata(prefs.getMetadataTypeByName(metadataType));
+            String myNewUrn = urnClient.createUrn(urls);
+            md.setValue(myNewUrn);
+            logical.addMetadata(md);
+            Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO, "URN: " + myNewUrn + " was created successfully!");
+            // save the mets file 
+            // only once or risk loosing a URN?
+            step.getProzess().writeMetadataFile(ff);
+            successful = true;
+        }
+        return successful;
+    }
+
     @Override
     public PluginReturnValue run() {
         boolean successful = false;
@@ -147,38 +188,33 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
             ArrayList<String> urls = new ArrayList<String>();
             urls.add(replacer.replace(publicationUrl));
 
-            if (logical.getType().isAnchor()) {
-                logical = logical.getAllChildren().get(0);
-            }
+            //TODO prüfen ob Elemente vorgeben sind oder nicht
 
-            // find existing URNs to replace URLs
-            for (Metadata md : logical.getAllMetadata()) {
-                if (md.getType().getName().equals(metadataType)) {
-                    foundExistingUrn = true;
-                    String existingUrn = md.getValue();
-                    successful = urnClient.replaceUrls(existingUrn, urls);
+            if (structElements.length > 0) {
+                // new algorithm
+                List<DocStruct> dsList = logical.getAllChildrenAsFlatList();
 
-                    if (!successful)
-                        Helper.addMessageToProcessLog(step.getProcessId(), LogType.ERROR, "URN: " + existingUrn + " could not be updated!");
-                    else {
-                        Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO, "URN: " + existingUrn + " was updated successfully!");
+                for (DocStruct ds : dsList) {
+                    String typeName = ds.getType().getName();
+                    //TODO remove
+                    int i=0;
+                    for (String structName : structElements) {
+                        if (typeName.equals(structName)) {
+                            Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO, "Found Element: " + structName);
+                            //TODO remove
+                            urls.set(0, urls.get(0) +"/"+ ++i);
+                            successful = replaceUrlsOrAddUrn(urls, ds, prefs, urnClient,ff);
+                        }
                     }
                 }
+
+            } else {
+
+                if (logical.getType().isAnchor()) {
+                    logical = logical.getAllChildren().get(0);
+                }
+                successful = replaceUrlsOrAddUrn(urls, logical, prefs, urnClient, ff);
             }
-
-            //if no URNs found yet register a new one
-            if (!foundExistingUrn) {
-                Metadata md = new Metadata(prefs.getMetadataTypeByName(metadataType));
-                String myNewUrn = urnClient.createUrn(urls);
-                md.setValue(myNewUrn);
-                logical.addMetadata(md);
-                Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO, "URN: " + myNewUrn + " was created successfully!");
-
-                // save the mets file
-                step.getProzess().writeMetadataFile(ff);
-                successful = true;
-            }
-
         } catch (ReadException | JsonException | PreferencesException | WriteException | IOException | IllegalArgumentException | InterruptedException
                 | SwapException | DAOException | MetadataTypeNotAllowedException e) {
             log.error(e);
