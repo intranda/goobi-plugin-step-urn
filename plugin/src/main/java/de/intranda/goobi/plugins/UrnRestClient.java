@@ -18,6 +18,7 @@ import de.intranda.goobi.plugins.Messages.UrnCreationMessage;
 import de.intranda.goobi.plugins.ResponseHandler.CreateResponseHandler;
 import de.intranda.goobi.plugins.ResponseHandler.PatchResponseHandler;
 import de.intranda.goobi.plugins.ResponseHandler.SuggestionResponseHandler;
+import ugh.dl.DocStructType;
 
 public class UrnRestClient {
 
@@ -30,17 +31,15 @@ public class UrnRestClient {
     /**
      * @param Uri URL of the URN service
      * @param namespace namespace in which URNs are created
-     * @param infix infix the user can specify
      * @param User Username of the API User
      * @param Password Password of the User
      */
-    public UrnRestClient(String Uri, String Namespace, String Infix, String User, String Password) {
+    public UrnRestClient(String Uri, String Namespace, String User, String Password) {
         this.auth = Base64.getEncoder().encodeToString((User.trim() + ":" + Password.trim()).getBytes());
         if (!Uri.startsWith("https"))
             throw new IllegalArgumentException("Bad URL - only https is permitted");
         uri = (!Uri.endsWith("/")) ? Uri + "/" : Uri;
         this.namespaceName = Namespace.trim();
-        this.infix = (Infix != null && Infix.trim().isEmpty()) ? null : Infix;
         gson = new Gson();
     }
 
@@ -57,72 +56,51 @@ public class UrnRestClient {
 
         Request request = Request.Get(uri + "namespaces/name/" + namespaceName + "/urn-suggestion");
         request = addHeaders(request);
-
         String response = request.execute().handleResponse(new SuggestionResponseHandler());
-
         return response;
     }
 
     /**
-     * Creates new URN
+     * registers new URN
      * 
      * @param urls
      * @return String with new URN
      * @throws ClientProtocolException
      * @throws IOException
-     * @throws IllegalArgumentException
      * @throws InterruptedException
      */
-    public String createUrn(ArrayList<String> urls)
-            throws ClientProtocolException, IOException, IllegalArgumentException, JsonSyntaxException, InterruptedException {
+    
+    public String registerUrn(String urn, ArrayList<String> urls)
+            throws ClientProtocolException, IOException, JsonSyntaxException {
 
-        String response = null;
-        int tries = 0;
-        String urn = infix == null ? getUrnSuggestion() : UrnGenerator.generateUrn(namespaceName, infix);
-        while (response == null && tries < 3) {
-            Request request = Request.Post(uri + "urns");
-            request = addHeaders(request);
-            try {
-                response = request.addHeader("Content-Type", "application/json")
-                        .bodyString(createUrnBodyString(urn, urls), ContentType.APPLICATION_JSON)
-                        .execute()
-                        .handleResponse(new CreateResponseHandler());
-            } catch (ClientProtocolException ex) {
-                if (ex.getMessage().equals("Errorcode: 409: URN " + urn + " is already registered")) {
-                    String newUrn = UrnGenerator.generateUrn(namespaceName, response);
-                    if (newUrn.equals(urn)) {
-                        Thread.sleep(2000);
-                        urn = UrnGenerator.generateUrn(namespaceName, response);
-                    } else {
-                        urn = newUrn;
-                    }
-                    tries++;
-                } else
-                    throw ex;
-            }
-        }
-        if (tries >= 3)
-            throw new ClientProtocolException("Error: Client tried 3 times to register an already existing URN");
+        Request request = Request.Post(uri + "urns");
+        request = addHeaders(request);
+
+        String response = request.addHeader("Content-Type", "application/json")
+                .bodyString(createUrnBodyString(urn, urls), ContentType.APPLICATION_JSON)
+                .execute()
+                .handleResponse(new CreateResponseHandler());
+
         return response;
     }
 
     /**
      * Replaces the urls of the provided URN
      * 
-     * @param Urn Name of the entry that shall be updated
+     * @param urn Name of the entry that shall be updated
      * @param urls Array of String with Metadata
      * @return true if operation was successful
      * @throws ClientProtocolException
      * @throws IOException
      * @throws IllegalArgumentException
      */
-    public boolean replaceUrls(String Urn, ArrayList<String> urls)
+    public boolean replaceUrls(String urn, ArrayList<String> urls)
             throws ClientProtocolException, IOException, IllegalArgumentException, JsonSyntaxException {
 
-        Request request = Request.Patch(uri + "urns/urn/" + Urn + "/" + "my-urls");
+        Request request = Request.Patch(uri + "urns/urn/" + urn + "/" + "my-urls");
         request = addHeaders(request);
         String response = request.addHeader("Content-Type", "application/json")
-                .bodyString(replaceUrlsBodyString(urls), ContentType.APPLICATION_JSON)
+                .bodyString(replaceUrlsBodyString(urn, urls), ContentType.APPLICATION_JSON)
                 .execute()
                 .handleResponse(new PatchResponseHandler());
         return response.equals("success");
@@ -134,8 +112,8 @@ public class UrnRestClient {
      * @param urls urls that shall be added to the JSONArray
      * @return String with JSONarray
      */
-    private String replaceUrlsBodyString(ArrayList<String> urls) {
-        ArrayList<UrlListMessage> ulm = createUrlList(urls);
+    private String replaceUrlsBodyString(String urn, ArrayList<String> urls) {
+        ArrayList<UrlListMessage> ulm = createUrlList(urn, urls);
         return gson.toJson(ulm);
     }
 
@@ -145,11 +123,10 @@ public class UrnRestClient {
      * @param urls urls to put in the array
      * @return arrayBuilder object
      */
-    private ArrayList<UrlListMessage> createUrlList(ArrayList<String> urls) {
+    private ArrayList<UrlListMessage> createUrlList(String urn, ArrayList<String> urls) {
         ArrayList<UrlListMessage> ulm = new ArrayList<UrlListMessage>();
         for (String url : urls) {
-            // Method Chaining
-            ulm.add(new UrlListMessage().setUrl(url));
+            ulm.add(new UrlListMessage().setUrl(url.replace("{pi.urn}", urn)));
         }
         return ulm;
     }
@@ -166,7 +143,7 @@ public class UrnRestClient {
         UrnCreationMessage createArk = new UrnCreationMessage();
         ArrayList<UrlListMessage> ulm = new ArrayList<UrlListMessage>();
         createArk.setUrn(Urn);
-        createArk.setUrls(createUrlList(urls));
+        createArk.setUrls(createUrlList(Urn, urls));
         return gson.toJson(createArk);
     }
 

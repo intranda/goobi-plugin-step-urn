@@ -1,6 +1,7 @@
 package de.intranda.goobi.plugins;
 
 import java.io.IOException;
+import java.sql.SQLException;
 import java.util.ArrayList;
 
 /**
@@ -45,12 +46,15 @@ import de.sub.goobi.helper.Helper;
 import de.sub.goobi.helper.VariableReplacer;
 import de.sub.goobi.helper.exceptions.DAOException;
 import de.sub.goobi.helper.exceptions.SwapException;
+
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import net.xeoh.plugins.base.annotations.PluginImplementation;
 import ugh.dl.DocStruct;
+import ugh.dl.DocStructType;
 import ugh.dl.Fileformat;
 import ugh.dl.Metadata;
+import ugh.dl.MetadataType;
 import ugh.dl.Prefs;
 import ugh.exceptions.MetadataTypeNotAllowedException;
 import ugh.exceptions.PreferencesException;
@@ -65,6 +69,18 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
     private String title = "intranda_step_urn";
     @Getter
     private Step step;
+    private Prefs prefs;
+    private String ppn;
+    private MetadataType ppntype;
+
+    private String metsUrnType;
+    private String modsUrnType;
+    private boolean setmodsUrn;
+
+    private boolean topStructOnly;
+    private boolean setAnchorUrn;
+    private boolean successful = true;
+
     private String metadataType;
     private String uri;
     private String namespace;
@@ -74,6 +90,10 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
     private String publicationUrl;
     private String infix;
     private String[] structElements;
+    private UrnRestClient urnClient;
+    private UrnGenerator urnGenerator;
+    private Fileformat ff;
+    private ArrayList<String> urls;
 
     @Override
     public void initialize(Step step, String returnPath) {
@@ -82,14 +102,19 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
 
         // read parameters from correct block in configuration file
         SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
-
-        metadataType = myconfig.getString("metadataType", "_urn");
         uri = myconfig.getString("uri", "https://api.nbn-resolving.org/v2/");
         namespace = myconfig.getString("namespace", "urn:nbn:de:gbv:NN");
         apiUser = myconfig.getString("apiUser", "user");
         apiPassword = myconfig.getString("apiPassword", "password");
 
-        // Liste mit Stukturelementen einlesen
+        metsUrnType = myconfig.getString("metadataTypeMets", "_urn");
+        modsUrnType = myconfig.getString("metadataTypeMods", "URN");
+        setmodsUrn = myconfig.getBoolean("generateModsUrn", false);
+
+        topStructOnly = myconfig.getBoolean("onlyTopUrn", true);
+        setAnchorUrn = myconfig.getBoolean("setAnchorUrn", false);
+
+        // read Array with structure elements from configuration
         structElements = myconfig.getStringArray("structElements/structElement");
         publicationUrl = myconfig.getString("publicationUrl", "https://viewer.example.org/{meta.CatalogIDDigital}");
         infix = myconfig.getString("infix");
@@ -138,87 +163,223 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
         return ret != PluginReturnValue.ERROR;
     }
 
-    private boolean replaceUrlsOrAddUrn(ArrayList<String> urls, DocStruct logical, Prefs prefs, UrnRestClient urnClient, Fileformat ff)
-            throws JsonSyntaxException, ClientProtocolException, IllegalArgumentException, MetadataTypeNotAllowedException, IOException, InterruptedException, WriteException, PreferencesException, SwapException, DAOException {
-
-        boolean foundExistingUrn = false;
-        boolean successful = false;
-        for (Metadata md : logical.getAllMetadata()) {
-            if (md.getType().getName().equals(metadataType)) {
-                foundExistingUrn = true;
-                String existingUrn = md.getValue();
-                successful = urnClient.replaceUrls(existingUrn, urls);
-
-                if (!successful)
-                    Helper.addMessageToProcessLog(step.getProcessId(), LogType.ERROR, "URN: " + existingUrn + " could not be updated!");
-                else {
-                    Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO, "URN: " + existingUrn + " was updated successfully!");
+    private void setUrn(DocStruct ds, boolean recursive)
+            throws JsonSyntaxException, ClientProtocolException, IllegalArgumentException, MetadataTypeNotAllowedException, WriteException,
+            PreferencesException, IOException, InterruptedException, SwapException, DAOException, SQLException, UrnDatabaseException {
+        boolean whiteListed = isWhiteListed(ds.getType());
+        //always save the ppn of the element it may be needed to identify its children
+        if (ds.getAllMetadata() != null && ds.getAllMetadata().size() > 0) {
+            for (Metadata m : ds.getAllMetadata()) {
+                if (m.getType().equals(ppntype)) {
+                    ppn = m.getValue();
                 }
             }
         }
-        //if no URNs found yet register a new one
-        if (!foundExistingUrn) {
-            Metadata md = new Metadata(prefs.getMetadataTypeByName(metadataType));
-            String myNewUrn = urnClient.createUrn(urls);
-            md.setValue(myNewUrn);
+
+        if (!whiteListed || ds.getType().getName().equals("boundbook")) {
+            // do nothing, maybe we need other types without urn too?
+        } else {
+            if (!replaceUrlsOrAddUrn(ds))
+                successful = false;
+        }
+
+        if (recursive) {
+            List<DocStruct> dsList = ds.getAllChildren();
+            if (dsList != null && dsList.size() > 0) {
+                for (DocStruct s : dsList) {
+                    setUrn(s, recursive);
+                }
+            }
+        }
+    }
+
+    /**
+     * checks if the DocStructType was whitelisted in the configuration file it will also whitelist the anchorelement and the topmost element if the
+     * plugin was configured accordingly
+     * 
+     * @param type the DocStructType provided
+     * @return true if the Element is whitelisted, false if not
+     */
+    private boolean isWhiteListed(DocStructType type) {
+        // whitelist topmost and anchor-element
+        if ((type.isAnchor() && setAnchorUrn) || (type.isTopmost() && topStructOnly))
+            return true;
+
+        for (String structName : structElements) {
+            if (type.getName().equals(structName)) {
+                //TODO remove
+                Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO, "Found Element: " + structName);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Returns true if the DocStruct-element allows to write modsUrns
+     * 
+     * @param ds
+     * @return
+     */
+    private boolean isAllowedUrn(DocStruct ds, String urnType) {
+        for (MetadataType metadataType : ds.getType().getAllMetadataTypes()) {
+            if (metadataType.getName().equals(urnType)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String findExistingUrn(DocStruct logical, String urnType) {
+        for (Metadata md : logical.getAllMetadata()) {
+            if (md.getType().getName().equals(urnType)) {
+                return md.getValue();
+            }
+        }
+        return null;
+    }
+
+    private boolean replaceUrlsOrAddUrn(DocStruct logical)
+            throws JsonSyntaxException, ClientProtocolException, IllegalArgumentException, MetadataTypeNotAllowedException, IOException,
+            InterruptedException, WriteException, PreferencesException, SwapException, DAOException, SQLException, UrnDatabaseException {
+
+        boolean foundExistingUrn = false;
+        String metsUrn = findExistingUrn(logical, metsUrnType);
+        String modsUrn = findExistingUrn(logical, modsUrnType);
+
+        if (metsUrn != null) {
+            foundExistingUrn = true;
+            if (modsUrn != null && !metsUrn.equals(modsUrn)) {
+                Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO,
+                        "Hinweis: unterschiedliche MEDs und MODs URN für das gleiche Element gefunden!");
+            }
+            if (metsUrn.startsWith(namespace)) {
+                //TODO remove
+                successful = true;
+                //successful = urnClient.replaceUrls(metsUrn, urls);
+                if (!successful)
+                    Helper.addMessageToProcessLog(step.getProcessId(), LogType.ERROR, "URN: " + metsUrn + " could not be updated!");
+                else {
+                    Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO, "URN: " + metsUrn + " was updated successfully!");
+                }
+            } else {
+                successful = true;
+                Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO,
+                        "Note: URN: " + metsUrn + "is not part of the namespace and will not be updated!");
+            }
+
+        }
+        if (modsUrn != null && metsUrn == null) {
+            foundExistingUrn = true;
+            Metadata md = new Metadata(prefs.getMetadataTypeByName(metsUrnType));
+            md.setValue(modsUrn);
             logical.addMetadata(md);
-            Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO, "URN: " + myNewUrn + " was created successfully!");
-            // save the mets file 
-            // only once or risk loosing a URN?
-            step.getProzess().writeMetadataFile(ff);
             successful = true;
+            Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO, "Notice: Found MODs-URN, copy value to METs");
+        }
+
+        //if no URN found yet register a new one
+        if (!foundExistingUrn) {
+            boolean modsUrnAllowed = isAllowedUrn(logical, modsUrnType);
+            boolean metsUrnAllowed = isAllowedUrn(logical, metsUrnType);
+
+            if (metsUrnAllowed || (modsUrnAllowed && setmodsUrn)) {
+                Metadata md = new Metadata(prefs.getMetadataTypeByName(metsUrnType));
+                int urnid = urnGenerator.getUrnId(ppn, logical.getType());
+                String myNewUrn = UrnGenerator.generateUrn(namespace, infix, urnid);
+
+                try {
+                    //TODO uncomment
+                    //urnClient.registerUrn(myNewUrn, urls);
+                    successful = true;
+                } catch (Exception ex) {
+                    // if registering the urn fails for any reason delete the database entry
+                    urnGenerator.removeUrnId(urnid);
+                    successful = false;
+                    Helper.addMessageToProcessLog(step.getProcessId(), LogType.ERROR,
+                            "Couldn't register urn, urnid " + urnid + " was removed from database!");
+                    throw ex;
+                }
+                if (metsUrnAllowed) {
+                    md.setValue(myNewUrn);
+                    logical.addMetadata(md);
+                }
+
+                if (setmodsUrn && modsUrnAllowed) {
+                    Metadata md2 = new Metadata(prefs.getMetadataTypeByName(modsUrnType));
+                    md2.setValue(myNewUrn);
+                    logical.addMetadata(md2);
+                }
+
+                Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO, "URN: " + myNewUrn + " was created successfully!");
+
+                // maybe better to save the mets file 
+                // only once but risk loosing a URN?
+                step.getProzess().writeMetadataFile(ff);
+                successful = true;
+            } else {
+                Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO, "No URN was created for Element ");
+                successful = false;
+            }
         }
         return successful;
     }
 
     @Override
     public PluginReturnValue run() {
-        boolean successful = false;
         boolean foundExistingUrn = false;
 
         try {
-            UrnRestClient urnClient = new UrnRestClient(uri, namespace, infix, apiUser, apiPassword);
+            urnGenerator = new UrnGenerator();
+            urnClient = new UrnRestClient(uri, namespace, apiUser, apiPassword);
+
             // read mets file
-            Fileformat ff = step.getProzess().readMetadataFile();
-            Prefs prefs = step.getProzess().getRegelsatz().getPreferences();
-            DocStruct logical = ff.getDigitalDocument().getLogicalDocStruct();
+            ff = step.getProzess().readMetadataFile();
+            prefs = step.getProzess().getRegelsatz().getPreferences();
+            ppntype = prefs.getMetadataTypeByName("CatalogIDDigital");
+            DocStruct ds = ff.getDigitalDocument().getLogicalDocStruct();
+
             // initialize VariableReplacer
             VariableReplacer replacer = new VariableReplacer(ff.getDigitalDocument(), prefs, step.getProzess(), step);
-            // create URL-List and add Value from Configuration
-            ArrayList<String> urls = new ArrayList<String>();
+
+            // create URL and add Value from Configuration
+            urls = new ArrayList<String>();
             urls.add(replacer.replace(publicationUrl));
 
-            //TODO prüfen ob Elemente vorgeben sind oder nicht
+            for (Metadata m : ds.getAllMetadata()) {
+                if (m.getType().equals(ppntype)) {
+                    ppn = m.getValue();
+                }
+            }
+            if (topStructOnly) {
+                if (ds.getType().isAnchor()) {
+                    if (setAnchorUrn) {
+                        setUrn(ds, false);
+                    }
+                    DocStruct firstchild = ds.getAllChildren().get(0);
+                    setUrn(firstchild, false);
 
-            if (structElements.length > 0) {
-                // new algorithm
-                List<DocStruct> dsList = logical.getAllChildrenAsFlatList();
+                } else {
+                    setUrn(ds, false);
+                }
+            } else {
+                if (ds.getType().isAnchor()) {
+                    if (setAnchorUrn) {
+                        setUrn(ds, true);
+                    } else {
 
-                for (DocStruct ds : dsList) {
-                    String typeName = ds.getType().getName();
-                    //TODO remove
-                    int i=0;
-                    for (String structName : structElements) {
-                        if (typeName.equals(structName)) {
-                            Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO, "Found Element: " + structName);
-                            //TODO remove
-                            urls.set(0, urls.get(0) +"/"+ ++i);
-                            successful = replaceUrlsOrAddUrn(urls, ds, prefs, urnClient,ff);
-                        }
+                        DocStruct firstchild = ds.getAllChildren().get(0);
+                        setUrn(firstchild, true);
                     }
                 }
-
-            } else {
-
-                if (logical.getType().isAnchor()) {
-                    logical = logical.getAllChildren().get(0);
-                }
-                successful = replaceUrlsOrAddUrn(urls, logical, prefs, urnClient, ff);
+                setUrn(ds, true);
             }
+
         } catch (ReadException | JsonException | PreferencesException | WriteException | IOException | IllegalArgumentException | InterruptedException
-                | SwapException | DAOException | MetadataTypeNotAllowedException e) {
+                | SwapException | DAOException | MetadataTypeNotAllowedException | SQLException | JsonSyntaxException | UrnDatabaseException e) {
             log.error(e);
             Helper.addMessageToProcessLog(step.getProcessId(), LogType.ERROR, e.getMessage());
+            successful = false;
         }
 
         log.info("URN step plugin executed");

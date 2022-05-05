@@ -1,40 +1,56 @@
 <config_plugin>
-    <!--
-        order of configuration is:
-          1.) project name and step name matches
-          2.) step name matches and project is *
-          3.) project name matches and step name is *
-          4.) project name and step name are *
-	-->
-    
-    <config>
-        <!-- which projects to use for (can be more then one, otherwise use *) -->
-        <project>*</project>
-        <step>*</step>
-        
-        <!-- URI of the URN API, must use httos -->
+	<!-- order of configuration is: 1.) project name and step name matches 2.) 
+		step name matches and project is * 3.) project name matches and step name 
+		is * 4.) project name and step name are * -->
+
+	<config>
+		<!-- which projects to use for (can be more then one, otherwise use *) -->
+		<project>*</project>
+		<step>*</step>
+
+		<!-- URI of the URN API, must use httos -->
 		<uri>https://api.nbn-resolving.org/v2/</uri>
 
 		<!-- namespace in which new URNs shall be created -->
 		<!-- example urn:nbn:de:gbv:NN -->
 		<namespace>urn:nbn:de:gbv:NN</namespace>
-		
+
 		<!-- infix that you want to use (optional) -->
-		<infix>goobi</infix>
-		
+		<infix>-goobi-</infix>
+
 		<!-- example URN urn:nbn:de:gbv:48-goobi-20220404122233 -->
-		
+
 		<!-- name of the API user -->
 		<apiUser>user</apiUser>
 
 		<!-- password of the API user -->
 		<apiPassword>password</apiPassword>
 
-		<!--target url URN will forward to -->
-		<publicationUrl>https://viewer.example.org/{meta.CatalogIDDigital}</publicationUrl>
+		<!--target url the newly generated urn will forward to. {pi.urn} will be 
+			replaced with the newly minted urn -->
+		<publicationUrl>https://viewer.example.org/viewer/resolver?urn={pi.urn}
+		</publicationUrl>
+		
+		<!--Generate URN only for the top Element (true) or for all Elements listed in 
+			structElements (false) -->
+			
+		<onlyTopUrn>false</onlyTopUrn>
 
-		<!--metadatatype in METS-File -->
-        <metadataType>_urn</metadataType>
-    </config>
+		<!-- if onlyTopUrn is set to false you have to specify the elements for 
+			which you want to generate a URN here -->
+		<structElements>
+			<structElement>Chapter</structElement>
+		</structElements>
 
+		<!-- metadata name for urns int METS-bloc "_urn" -->
+		<metadataTypeMets>_urn</metadataTypeMets>
+
+		<!--metadata name for URNs in MODS-bloc. -->
+		<metadataTypeMods>URN</metadataTypeMods>
+
+		<!--Shall the plugin create URNs in the MODS-bloc. The rule set entries of certain elements may have to be altered, if you wish to use this  -->
+		<generateModsUrn>false</generateModsUrn>
+
+		<setAnchorUrn>false</setAnchorUrn>
+	</config>
 </config_plugin>
