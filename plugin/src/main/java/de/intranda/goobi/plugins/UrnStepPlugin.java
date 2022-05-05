@@ -163,11 +163,11 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
         return ret != PluginReturnValue.ERROR;
     }
 
-    private void setUrn(DocStruct ds, boolean recursive)
+    private void setUrn(DocStruct ds)
             throws JsonSyntaxException, ClientProtocolException, IllegalArgumentException, MetadataTypeNotAllowedException, WriteException,
             PreferencesException, IOException, InterruptedException, SwapException, DAOException, SQLException, UrnDatabaseException {
         boolean whiteListed = isWhiteListed(ds.getType());
-        //always save the ppn of the element it may be needed to identify its children
+        //always look for the ppn 
         if (ds.getAllMetadata() != null && ds.getAllMetadata().size() > 0) {
             for (Metadata m : ds.getAllMetadata()) {
                 if (m.getType().equals(ppntype)) {
@@ -182,12 +182,14 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
             if (!replaceUrlsOrAddUrn(ds))
                 successful = false;
         }
-
-        if (recursive) {
+        
+        // if there are elements on the whitelist work the whole tree
+        // if the Element is an Anchor iterate at least to the next child to maybe set the work urn
+        if (structElements.length>0 ||ds.getType().isAnchor()) {
             List<DocStruct> dsList = ds.getAllChildren();
             if (dsList != null && dsList.size() > 0) {
                 for (DocStruct s : dsList) {
-                    setUrn(s, recursive);
+                    setUrn(s);
                 }
             }
         }
@@ -346,34 +348,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
             urls = new ArrayList<String>();
             urls.add(replacer.replace(publicationUrl));
 
-            for (Metadata m : ds.getAllMetadata()) {
-                if (m.getType().equals(ppntype)) {
-                    ppn = m.getValue();
-                }
-            }
-            if (topStructOnly) {
-                if (ds.getType().isAnchor()) {
-                    if (setAnchorUrn) {
-                        setUrn(ds, false);
-                    }
-                    DocStruct firstchild = ds.getAllChildren().get(0);
-                    setUrn(firstchild, false);
-
-                } else {
-                    setUrn(ds, false);
-                }
-            } else {
-                if (ds.getType().isAnchor()) {
-                    if (setAnchorUrn) {
-                        setUrn(ds, true);
-                    } else {
-
-                        DocStruct firstchild = ds.getAllChildren().get(0);
-                        setUrn(firstchild, true);
-                    }
-                }
-                setUrn(ds, true);
-            }
+            setUrn(ds);
 
         } catch (ReadException | JsonException | PreferencesException | WriteException | IOException | IllegalArgumentException | InterruptedException
                 | SwapException | DAOException | MetadataTypeNotAllowedException | SQLException | JsonSyntaxException | UrnDatabaseException e) {
