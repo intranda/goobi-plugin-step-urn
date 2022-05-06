@@ -211,8 +211,6 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
 
 		for (String structName : allowedTypes) {
 			if (type.getName().equals(structName)) {
-				// TODO remove
-				Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO, "Found Element: " + structName);
 				return true;
 			}
 		}
@@ -276,9 +274,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
 						"Hinweis: unterschiedliche MEDs und MODs URN für das gleiche Element gefunden!");
 			}
 			if (metsUrn.startsWith(namespace)) {
-				// TODO remove
-				successful = true;
-				// successful = urnClient.replaceUrls(metsUrn, urls);
+				 successful = urnClient.replaceUrls(metsUrn, urls);
 				if (!successful)
 					Helper.addMessageToProcessLog(step.getProcessId(), LogType.ERROR,
 							"URN: " + metsUrn + " could not be updated!");
