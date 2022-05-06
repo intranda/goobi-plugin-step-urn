@@ -7,50 +7,51 @@
 		<!-- which projects to use for (can be more then one, otherwise use *) -->
 		<project>*</project>
 		<step>*</step>
-
-		<!-- URI of the URN API, must use httos -->
-		<uri>https://api.nbn-resolving.org/v2/</uri>
-
-		<!-- namespace in which new URNs shall be created -->
-		<!-- example urn:nbn:de:gbv:NN -->
-		<namespace>urn:nbn:de:gbv:NN</namespace>
-
-		<!-- infix that you want to use (optional) -->
-		<infix>-goobi-</infix>
-
-		<!-- example URN urn:nbn:de:gbv:48-goobi-20220404122233 -->
-
+		
 		<!-- name of the API user -->
 		<apiUser>user</apiUser>
 
 		<!-- password of the API user -->
 		<apiPassword>password</apiPassword>
 
+		<!-- URI of the URN API, must use httos -->
+		<apiUri>https://api.nbn-resolving.org/v2/</apiUri>
+
+		<!-- namespace in which new URNs shall be created -->
+		<!-- example urn:nbn:de:{SIGIL} -->
+		<namespace>urn:nbn:de:{SIGIL}</namespace>
+
+		<!-- infix that you want to use (optional) -->
+		<infix>-goobi-</infix>
+
+		<!-- example URN urn:nbn:de:{SIGIL}-goobi-20220404122233 -->
+
 		<!--target url the newly generated urn will forward to. {pi.urn} will be 
 			replaced with the newly minted urn -->
 		<publicationUrl>https://viewer.example.org/viewer/resolver?urn={pi.urn}
 		</publicationUrl>
-		
-		<!--Generate URN only for the top Element (true) or for all Elements listed in 
-			structElements (false) -->
-			
-		<onlyTopUrn>false</onlyTopUrn>
 
-		<!-- if onlyTopUrn is set to false you have to specify the elements for 
-			which you want to generate a URN here -->
-		<structElements>
-			<structElement>Chapter</structElement>
-		</structElements>
+		<!--Generate URN for the work (e.g. for Monograph, Manuscript, Volume, etc.)  -->
+		<work>true</work>
 
-		<!-- metadata name for urns int METS-bloc "_urn" -->
-		<metadataTypeMets>_urn</metadataTypeMets>
+		<!--Generate URN for the anchor Element -->
+		<anchor>false</anchor>
+
+		<!--Elements listed here will receive a URN. If work is set to true the 
+			work element will receive a URN even if it is not listed here -->
+		<!--
+		<allowed>
+			<type>Chapter</type>
+		</allowed>
+		-->
+		<!-- metadata name for urns in METS-bloc "_urn" -->
+		<typeNameMets>_urn</typeNameMets>
 
 		<!--metadata name for URNs in MODS-bloc. -->
-		<metadataTypeMods>URN</metadataTypeMods>
+		<typeNameMods>URN</typeNameMods>
 
-		<!--Shall the plugin create URNs in the MODS-bloc. The rule set entries of certain elements may have to be altered, if you wish to use this  -->
-		<generateModsUrn>false</generateModsUrn>
-
-		<setAnchorUrn>false</setAnchorUrn>
+		<!--Shall the plugin create URNs in the MODS-bloc. The rule set entries 
+			of certain elements may have to be altered, if you wish to use this -->
+		<createModsUrns>false</createModsUrns>
 	</config>
 </config_plugin>
