@@ -369,6 +369,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
 				| IllegalArgumentException | InterruptedException | SwapException | DAOException
 				| MetadataTypeNotAllowedException | SQLException | JsonSyntaxException | UrnDatabaseException e) {
 			log.error(e);
+			//e.printStackTrace();
 			Helper.addMessageToProcessLog(step.getProcessId(), LogType.ERROR, e.getMessage());
 			successful = false;
 		}

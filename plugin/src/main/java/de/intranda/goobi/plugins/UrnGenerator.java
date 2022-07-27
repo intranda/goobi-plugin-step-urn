@@ -12,6 +12,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import org.apache.commons.lang3.StringUtils;
+
+import com.drew.lang.StringUtil;
+
 import de.sub.goobi.persistence.managers.MySQLHelper;
 import ugh.dl.DocStructType;
 
@@ -19,21 +23,13 @@ public class UrnGenerator {
     private Connection con;
     private static HashMap<Character, Integer> checksumConversionTable = initializeUrnChecksumConversionTable();
     private final String URN_TABLE_NAME = "urn_table";
-    private final String URN_COLUMN_NAME = "urn_id";
+    private final String URNID_COLUMN_NAME = "urn_id";
     private final String WORKID_COLUMN_NAME = "werk_id";
     private final String STRUCT_COLUMN_NAME = "struktur_typ";
 
     public UrnGenerator() throws SQLException {
         con = MySQLHelper.getInstance().getConnection();
     }
-
-    //    public static String generateUrn(String urn_prefix, String infix) {
-    //        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuuMMddhhmmss");
-    //        LocalDateTime localDate = LocalDateTime.now();
-    //        String timeStamp = dtf.format(localDate);
-    //        String urnWithoutCS = urn_prefix + "-" + infix + "-" + timeStamp;
-    //        return urnWithoutCS; //  + calculateUrnChecksum(urnWithoutCS);
-    //    }
 
     /**
      * Either adds the new element to the database and returns the newly created UrnID or just leaves the database unchanged and returns the
@@ -46,6 +42,7 @@ public class UrnGenerator {
      * @throws UrnDatabaseException if the database is corrupted
      */
     public int getUrnId(String workID, DocStructType struct) throws SQLException, UrnDatabaseException {
+      
         int resultInt = -1; // default (illegal) return value - this should never happen
         if (workID == null) {
             workID = "";
@@ -57,22 +54,26 @@ public class UrnGenerator {
             structType = struct.getName();
         }
         // lock table in order to prevent race conditions
+       
         Statement sLock = con.createStatement();
+        try {
         sLock.executeUpdate("LOCK TABLE " + URN_TABLE_NAME + " WRITE");
         sLock.close();
 
         if (struct.isAnchor() || struct.isTopmost()) {
-            PreparedStatement sQuery1 = con.prepareStatement("SELECT " + URN_COLUMN_NAME + " FROM " + URN_TABLE_NAME + " WHERE " + WORKID_COLUMN_NAME
-                    + " = ? AND " + STRUCT_COLUMN_NAME + " = ? ;");
+            PreparedStatement sQuery1 = con.prepareStatement("SELECT " + URNID_COLUMN_NAME + " FROM " + URN_TABLE_NAME + " WHERE "
+                    + WORKID_COLUMN_NAME + " = ? AND " + STRUCT_COLUMN_NAME + " = ? ;", ResultSet.TYPE_SCROLL_INSENSITIVE , 
+                    ResultSet.CONCUR_UPDATABLE);
             sQuery1.setString(1, workID);
             sQuery1.setString(2, structType);
             ResultSet resultS = sQuery1.executeQuery();
+           // if (resultS.isLast()&&resultS.last())
             resultS.last();
             if (resultS.getRow() > 1) { // DB contains unique structType-workID combination multiple times
                 throw new UrnDatabaseException("URN database in inconsistent state");
             }
             if (resultS.getRow() == 1) { // DB contains structType-workID combination already. No insertion.
-                resultInt = resultS.getInt(URN_COLUMN_NAME);
+                resultInt = resultS.getInt(URNID_COLUMN_NAME);
             }
             if (resultS.getRow() == 0) { // DB does not contain structType-workID combination. Insert the new row.
                 PreparedStatement sUpdate1 =
@@ -108,21 +109,56 @@ public class UrnGenerator {
         Statement sLock2 = con.createStatement();
         sLock2.executeUpdate("UNLOCK TABLES;");
         sLock2.close();
-       
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            Statement sLock2 = con.createStatement();
+            sLock2.executeUpdate("UNLOCK TABLES;");
+            sLock2.close();
+            throw new SQLException ("Something went wrong!", ex); 
+        }
         return resultInt;
     }
     
+    public static String generateUrnTimeStamp(String urn_prefix, String infix) {
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuu-MM-dd-hh-mm-ss");
+        LocalDateTime localDate = LocalDateTime.now();
+        String timeStamp = dtf.format(localDate);
+        String urnWithoutCS = urn_prefix + "-" + infix + "-" + timeStamp;
+        return urnWithoutCS;
+    }
+
     public static String generateUrn(String prefix, String infix, int urnId) {
-        if (infix!=null && !infix.isEmpty()) {
-            return prefix + infix + urnId + calculateUrnChecksum(prefix + infix + urnId);
-        }else
-            return prefix + urnId + calculateUrnChecksum(prefix + urnId);
+        StringBuilder sb = new StringBuilder();
+        sb.append(prefix);
+        sb.append("-");
+        if (!StringUtils.isBlank(infix)) {
+            sb.append(infix);
+        }
+        sb.append(urnId);
+        sb.append(calculateUrnChecksum(sb.toString()));
+        return sb.toString();
+    }
+    
+//    public String getURN(int urnId) {
+//        
+//    }
+    
+    public boolean saveUrn(int urnId, String urn) {
+        try {
+            PreparedStatement checkQuery = con.prepareStatement("SELECT urn FROM " + URN_TABLE_NAME + "WHERE " + URNID_COLUMN_NAME + "=?");
+            checkQuery.setInt(1, urnId);
+            checkQuery.executeUpdate();
+            checkQuery.close();
+        } catch (SQLException ex) {
+            return false;
+        }
+        return true;
     }
 
     public boolean removeUrnId(int urnId) {
 
         try {
-            PreparedStatement deleteQuery = con.prepareStatement("DELETE FROM " + URN_TABLE_NAME + "WHERE " + URN_COLUMN_NAME + "=?");
+            PreparedStatement deleteQuery = con.prepareStatement("DELETE FROM " + URN_TABLE_NAME + "WHERE " + URNID_COLUMN_NAME + "=?");
             deleteQuery.setInt(1, urnId);
             deleteQuery.executeUpdate();
             deleteQuery.close();
