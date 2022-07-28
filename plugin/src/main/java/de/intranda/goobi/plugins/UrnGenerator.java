@@ -26,6 +26,8 @@ public class UrnGenerator {
     private final String URNID_COLUMN_NAME = "urn_id";
     private final String WORKID_COLUMN_NAME = "werk_id";
     private final String STRUCT_COLUMN_NAME = "struktur_typ";
+    private final String URN_COLUMN_NAME = "urn";
+    private boolean oldUrnEntry = false;
 
     public UrnGenerator() throws SQLException {
         con = MySQLHelper.getInstance().getConnection();
@@ -42,7 +44,7 @@ public class UrnGenerator {
      * @throws UrnDatabaseException if the database is corrupted
      */
     public int getUrnId(String workID, DocStructType struct) throws SQLException, UrnDatabaseException {
-      
+
         int resultInt = -1; // default (illegal) return value - this should never happen
         if (workID == null) {
             workID = "";
@@ -54,71 +56,66 @@ public class UrnGenerator {
             structType = struct.getName();
         }
         // lock table in order to prevent race conditions
-       
+
         Statement sLock = con.createStatement();
         try {
-        sLock.executeUpdate("LOCK TABLE " + URN_TABLE_NAME + " WRITE");
-        sLock.close();
+            sLock.executeUpdate("LOCK TABLE " + URN_TABLE_NAME + " WRITE");
+            sLock.close();
 
-        if (struct.isAnchor() || struct.isTopmost()) {
-            PreparedStatement sQuery1 = con.prepareStatement("SELECT " + URNID_COLUMN_NAME + " FROM " + URN_TABLE_NAME + " WHERE "
-                    + WORKID_COLUMN_NAME + " = ? AND " + STRUCT_COLUMN_NAME + " = ? ;", ResultSet.TYPE_SCROLL_INSENSITIVE , 
-                    ResultSet.CONCUR_UPDATABLE);
-            sQuery1.setString(1, workID);
-            sQuery1.setString(2, structType);
-            ResultSet resultS = sQuery1.executeQuery();
-           // if (resultS.isLast()&&resultS.last())
-            resultS.last();
-            if (resultS.getRow() > 1) { // DB contains unique structType-workID combination multiple times
-                throw new UrnDatabaseException("URN database in inconsistent state");
-            }
-            if (resultS.getRow() == 1) { // DB contains structType-workID combination already. No insertion.
-                resultInt = resultS.getInt(URNID_COLUMN_NAME);
-            }
-            if (resultS.getRow() == 0) { // DB does not contain structType-workID combination. Insert the new row.
-                PreparedStatement sUpdate1 =
-                        con.prepareStatement("INSERT INTO " + URN_TABLE_NAME + " VALUES(?,?,?);", Statement.RETURN_GENERATED_KEYS);
-                sUpdate1.setString(1, null);
-                sUpdate1.setString(2, workID);
-                sUpdate1.setString(3, structType);
-                sUpdate1.executeUpdate();
-                ResultSet rs = sUpdate1.getGeneratedKeys();
-                if (rs.next()) {
-                    resultInt = rs.getInt(1);
-                } else {
-                    throw new SQLException("Could not retreive newly generated URN from database");
+            if (struct.isAnchor() || struct.isTopmost()) {
+                PreparedStatement sQuery1 =
+                        con.prepareStatement("SELECT " + URNID_COLUMN_NAME + " FROM " + URN_TABLE_NAME + " WHERE " + WORKID_COLUMN_NAME + " = ? AND "
+                                + STRUCT_COLUMN_NAME + " = ? ;", ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_UPDATABLE);
+                sQuery1.setString(1, workID);
+                sQuery1.setString(2, structType);
+                ResultSet resultS = sQuery1.executeQuery();
+                resultS.last();
+                if (resultS.getRow() > 1) { // DB contains unique structType-workID combination multiple times
+                    throw new UrnDatabaseException("URN database in inconsistent state");
                 }
-                sUpdate1.close();
+                if (resultS.getRow() == 1) { // DB contains structType-workID combination already. No insertion.
+                    resultInt = resultS.getInt(URNID_COLUMN_NAME);
+                    this.oldUrnEntry = true;
+                }
+                if (resultS.getRow() == 0) { // DB does not contain structType-workID combination. Insert the new row.
+                   resultInt = createNewDbEntry(workID, structType);
+                }
+                sQuery1.close();
+            } else { // multiple entries of same structType-workID combination possible
+                resultInt = createNewDbEntry(workID, structType);
             }
-            sQuery1.close();
-        } else { // multiple entries of same structType-workID combination possible
-            PreparedStatement sUpdate2 = con.prepareStatement("INSERT INTO " + URN_TABLE_NAME + " VALUES(?,?,?);", Statement.RETURN_GENERATED_KEYS);
-            sUpdate2.setString(1, null);
-            sUpdate2.setString(2, workID);
-            sUpdate2.setString(3, structType);
-            sUpdate2.executeUpdate();
-            ResultSet rs = sUpdate2.getGeneratedKeys();
-            if (rs.next()) {
-                resultInt = rs.getInt(1);
-            } else {
-                throw new SQLException("Could not retreive newly generated URN from database");
-            }
-            sUpdate2.close();
-        }
 
-        Statement sLock2 = con.createStatement();
-        sLock2.executeUpdate("UNLOCK TABLES;");
-        sLock2.close();
+            Statement sLock2 = con.createStatement();
+            sLock2.executeUpdate("UNLOCK TABLE " + URN_TABLE_NAME + ";");
+            sLock2.close();
         } catch (SQLException ex) {
             ex.printStackTrace();
-            Statement sLock2 = con.createStatement();
-            sLock2.executeUpdate("UNLOCK TABLES;");
-            sLock2.close();
-            throw new SQLException ("Something went wrong!", ex); 
+            Statement unLock = con.createStatement();
+            unLock.executeUpdate("UNLOCK TABLE " + URN_TABLE_NAME + ";");
+            unLock.close();
+            throw new SQLException("Something went wrong!", ex);
         }
         return resultInt;
     }
-    
+
+    private int createNewDbEntry(String workID, String structType) throws SQLException {
+        int resultInt = -1;
+        PreparedStatement sUpdate1 =
+                con.prepareStatement("INSERT INTO " + URN_TABLE_NAME + "(" + WORKID_COLUMN_NAME + "," + STRUCT_COLUMN_NAME + ")" + " VALUES(?,?);",
+                        Statement.RETURN_GENERATED_KEYS);
+        sUpdate1.setString(1, workID);
+        sUpdate1.setString(2, structType);
+        sUpdate1.executeUpdate();
+        ResultSet rs = sUpdate1.getGeneratedKeys();
+        if (rs.next()) {
+            resultInt = rs.getInt(1);
+        } else {
+            throw new SQLException("Could not retreive newly generated URN from database");
+        }
+        sUpdate1.close();
+        return resultInt;
+    }
+
     public static String generateUrnTimeStamp(String urn_prefix, String infix) {
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuu-MM-dd-hh-mm-ss");
         LocalDateTime localDate = LocalDateTime.now();
@@ -138,12 +135,8 @@ public class UrnGenerator {
         sb.append(calculateUrnChecksum(sb.toString()));
         return sb.toString();
     }
-    
-//    public String getURN(int urnId) {
-//        
-//    }
-    
-    public boolean saveUrn(int urnId, String urn) {
+
+    public boolean getUrnFromDB(int urnId, String urn) {
         try {
             PreparedStatement checkQuery = con.prepareStatement("SELECT urn FROM " + URN_TABLE_NAME + "WHERE " + URNID_COLUMN_NAME + "=?");
             checkQuery.setInt(1, urnId);
@@ -154,7 +147,7 @@ public class UrnGenerator {
         }
         return true;
     }
-
+    
     public boolean removeUrnId(int urnId) {
 
         try {
@@ -166,6 +159,24 @@ public class UrnGenerator {
             return false;
         }
         return true;
+    }
+
+    public boolean writeUrnToDatabase(int urnId, String urn) {
+        if (!oldUrnEntry) {
+            try {
+                PreparedStatement updateUrnQuery =
+                        con.prepareStatement("UPDATE " + URN_TABLE_NAME + "SET " + URN_COLUMN_NAME + "=?" + "WHERE " + URNID_COLUMN_NAME + "=?");
+                updateUrnQuery.setString(1, urn);
+                updateUrnQuery.setInt(2, urnId);
+                updateUrnQuery.executeUpdate();
+                updateUrnQuery.close();
+            } catch (SQLException ex) {
+                return false;
+            }
+            return true;
+        } else {
+            return false;
+        }
     }
 
     /**

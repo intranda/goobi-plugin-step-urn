@@ -22,7 +22,14 @@
 		<namespace>urn:nbn:de:{SIGIL}</namespace>
 
 		<!-- infix that you want to use (optional) -->
-		<infix>-goobi-</infix>
+		<infix>goobi-</infix>
+		
+		<!-- optional Element, 
+			increment if you want to use incremantation (300,301,302...) to generate the part after the infix
+			timestamp if you want to use a timestamp (2042-09-23-06-30-15) to generate the part after the infix
+			default method is increment!
+		  -->
+		<urnGenerationMethod>timestamp</urnGenerationMethod>
 
 		<!-- example URN urn:nbn:de:{SIGIL}-goobi-20220404122233 -->
 
