@@ -30,7 +30,12 @@
 			default method is increment!
 		  -->
 		<urnGenerationMethod>timestamp</urnGenerationMethod>
-
+		
+		<!-- optional Element, 
+			false if you don't want URNs with a Checksum
+			true if you want URNs with a Checksum
+		 -->
+		<generateChecksum>false</generateChecksum>
 		<!-- example URN urn:nbn:de:{SIGIL}-goobi-20220404122233 -->
 
 		<!--target url the newly generated urn will forward to. {pi.urn} will be 
