@@ -94,12 +94,12 @@ public class UrnGenerator {
             }
 
             Statement sLock2 = con.createStatement();
-            sLock2.executeUpdate("UNLOCK TABLE " + URN_TABLE_NAME + ";");
+            sLock2.executeUpdate("UNLOCK TABLES;");
             sLock2.close();
         } catch (SQLException ex) {
             ex.printStackTrace();
             Statement unLock = con.createStatement();
-            unLock.executeUpdate("UNLOCK TABLE " + URN_TABLE_NAME + ";");
+            unLock.executeUpdate("UNLOCK TABLES;");
             unLock.close();
             throw new SQLException("Something went wrong!", ex);
         }
