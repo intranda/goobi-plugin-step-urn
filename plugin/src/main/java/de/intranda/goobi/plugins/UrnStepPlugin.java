@@ -305,7 +305,6 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
             if (metsUrnAllowed || (modsUrnAllowed && setmodsUrn)) {
                 Metadata md = new Metadata(prefs.getMetadataTypeByName(metsUrnType));
 
-                
                 String myNewUrn;
                 Urn urn = urnGenerator.getUrnId(ppn, logical.getType());
                 if (urn.isOldEntry()) {
@@ -319,48 +318,54 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                     myNewUrn = urnGenerator.generateUrn(namespace, infix, urn);
 
                     // if there is a duplicate generate a new URN only relevant for timestamped urns
+                    int breakcount = 0;
                     while (urnGenerationMethod == UrnGenerationMethod.TIMESTAMP && urnGenerator.findDuplicate(myNewUrn)) {
                         TimeUnit.SECONDS.sleep(2);
+                        Helper.addMessageToProcessLog(step.getProcessId(), LogType.DEBUG, "URN-Generation to fast had to wait a few seconds!");
                         myNewUrn = urnGenerator.generateUrn(namespace, infix, urn);
+                        if (breakcount++ > 2)
+                            throw new IllegalArgumentException("This should never happen");
                     }
-                    
+
                     try {
                         if (myNewUrn.equals(urnClient.registerUrn(myNewUrn, urls))) {
                             urn.setUrn(myNewUrn);
-                            urnGenerator.writeUrnToDatabase(urn);
-                            successful = true;
+                            if (!urnGenerator.writeUrnToDatabase(urn)) {
+                                Helper.addMessageToProcessLog(step.getProcessId(), LogType.ERROR,
+                                        "The database entry with ID" + urn.getId() + " could not be updated with the new URN: " + urn.getUrn());
+                                successful = true;
+                            }
                         }
                     } catch (Exception ex) {
-                        // if registering the urn fails for any reason delete the database entry
-                        // but if we can change the urls, continue...
-                        if (!urnClient.replaceUrls(urn.getUrn(), urls)) {
+                        // if registering the urn fails for any reason 
+                        // and the entry is new delete it
+                        successful = false;
+                        if (!urn.isOldEntry()) {
                             urnGenerator.removeUrnId(urn.getId());
-                            successful = false;
                             Helper.addMessageToProcessLog(step.getProcessId(), LogType.ERROR,
-                                    "Couldn't register urn: "+urn.getUrn() +"with urnid: " + urn.getId() + " was removed from database!");
+                                    "Couldn't register urn: " + urn.getUrn() + "with urnid: " + urn.getId() + " was removed from database!");
                             throw ex;
                         } else {
                             successful = true;
                         }
-
                     }
-
                 }
 
                 if (metsUrnAllowed) {
                     md.setValue(urn.getUrn());
-                    //    logical.addMetadata(md);
+                    logical.addMetadata(md);
                 }
 
                 if (setmodsUrn && modsUrnAllowed) {
                     Metadata md2 = new Metadata(prefs.getMetadataTypeByName(modsUrnType));
                     md2.setValue(urn.getUrn());
-                    // logical.addMetadata(md2);
+                    logical.addMetadata(md2);
                 }
 
-                Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO, "URN: " + urn.getUrn() + " was created successfully!");
+                Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO,
+                        "URN: " + urn.getUrn() + " was created successfully for " + logical.getDocstructType());
 
-                // maybe better to save the mets file
+                // maybe it's better to save the mets file
                 // only once but risk loosing a URN?
                 step.getProzess().writeMetadataFile(ff);
                 successful = true;
@@ -374,11 +379,8 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
 
     @Override
     public PluginReturnValue run() {
-        boolean foundExistingUrn = false;
-
         try {
-            //TODO add Variable for Checksumgeneration in config-file
-            urnGenerator = new UrnGenerator(urnGenerationMethod, true);
+            urnGenerator = new UrnGenerator(urnGenerationMethod, generateChecksum);
             urnClient = new UrnRestClient(uri, namespace, apiUser, apiPassword);
 
             // read mets file

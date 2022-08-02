@@ -16,9 +16,10 @@ import org.apache.commons.lang3.StringUtils;
 
 import de.sub.goobi.persistence.managers.MySQLHelper;
 import lombok.Getter;
+import lombok.extern.log4j.Log4j2;
 import ugh.dl.DocStructType;
 
-
+@Log4j2
 public class UrnGenerator {
     private Connection con;
     private static HashMap<Character, Integer> checksumConversionTable = initializeUrnChecksumConversionTable();
@@ -101,7 +102,7 @@ public class UrnGenerator {
             Statement unLock = con.createStatement();
             unLock.executeUpdate("UNLOCK TABLES;");
             unLock.close();
-            throw new SQLException("Something went wrong!", ex);
+            throw new SQLException("Error getting urn data from database", ex);
         }
         return new Urn(resultInt, urn, oldEntry);
     }
@@ -165,26 +166,16 @@ public class UrnGenerator {
         return sb.toString();
     }
 
-    public boolean getUrnFromDB(int urnId, String urn) {
-        try {
-            PreparedStatement checkQuery = con.prepareStatement("SELECT urn FROM " + URN_TABLE_NAME + "WHERE " + URNID_COLUMN_NAME + "=?");
-            checkQuery.setInt(1, urnId);
-            checkQuery.executeUpdate();
-            checkQuery.close();
-        } catch (SQLException ex) {
-            return false;
-        }
-        return true;
-    }
 
     public boolean removeUrnId(int urnId) {
 
         try {
-            PreparedStatement deleteQuery = con.prepareStatement("DELETE FROM " + URN_TABLE_NAME + "WHERE " + URNID_COLUMN_NAME + "=?");
+            PreparedStatement deleteQuery = con.prepareStatement("DELETE FROM " + URN_TABLE_NAME + "WHERE " + URNID_COLUMN_NAME + "=?;");
             deleteQuery.setInt(1, urnId);
             deleteQuery.executeUpdate();
             deleteQuery.close();
         } catch (SQLException ex) {
+            log.error(ex);
             return false;
         }
         return true;
@@ -192,37 +183,41 @@ public class UrnGenerator {
 
     public boolean writeUrnToDatabase(Urn urn) {
         if (!urn.isOldEntry()) {
+            boolean result = false;
             try {
                 PreparedStatement updateUrnQuery =
-                        con.prepareStatement("UPDATE " + URN_TABLE_NAME + "SET " + URN_COLUMN_NAME + "=?" + "WHERE " + URNID_COLUMN_NAME + "=?");
+                        con.prepareStatement("UPDATE " + URN_TABLE_NAME + " SET " + URN_COLUMN_NAME + "=?" + " WHERE " + URNID_COLUMN_NAME + "=?");
                 updateUrnQuery.setString(1, urn.getUrn());
                 updateUrnQuery.setInt(2, urn.getId());
-                updateUrnQuery.executeUpdate();
+                if (updateUrnQuery.executeUpdate()>0)
+                    result= true;
                 updateUrnQuery.close();
             } catch (SQLException ex) {
+                log.error(ex);
                 return false;
             }
-            return true;
+            return result;
         } else {
+            //old entries should not get updated!
             return false;
         }
     }
 
     public boolean findDuplicate(String urn) {
         try {
-            PreparedStatement checkQuery = con.prepareStatement("SELECT "+URNID_COLUMN_NAME +" FROM " + URN_TABLE_NAME + "WHERE " + URN_COLUMN_NAME + "=?",ResultSet.TYPE_SCROLL_INSENSITIVE,
+            PreparedStatement checkQuery = con.prepareStatement("SELECT "+ URNID_COLUMN_NAME +" FROM " + URN_TABLE_NAME + " WHERE " + URN_COLUMN_NAME + "=?",ResultSet.TYPE_SCROLL_INSENSITIVE,
                     ResultSet.CONCUR_UPDATABLE);
             checkQuery.setString(1, urn);
             ResultSet resultS = checkQuery.executeQuery();
-            checkQuery.executeQuery();
-            checkQuery.close();
             resultS.last();
-            
+            boolean result = resultS.getRow() >= 1;
+            checkQuery.close();
             //if a result was returned there was a duplicate!
-            return (resultS.getRow() >= 1);
+            return result;
         } catch (SQLException ex) {
+            log.error(ex);
             //shouldn't happen better try again with a new urn
-            return false;
+            return true;
         }
     }
 
