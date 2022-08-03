@@ -116,8 +116,8 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
         setmodsUrn = myconfig.getBoolean("createModsUrns", false);
         setWorkUrn = myconfig.getBoolean("work", true);
         setAnchorUrn = myconfig.getBoolean("anchor", false);
-        generateChecksum = myconfig.getBoolean("generateChecksum", false);
-        String urnGenerationMethodString = myconfig.getString("urnGenerationMethod", "increment");
+        generateChecksum = myconfig.getBoolean("checksum", false);
+        String urnGenerationMethodString = myconfig.getString("generationMethod", "increment");
         for (UrnGenerationMethod generationMethod : UrnGenerationMethod.values()) {
             if (urnGenerationMethodString.toLowerCase().equals(generationMethod.toString().toLowerCase())) {
                 urnGenerationMethod = generationMethod;
@@ -312,7 +312,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                     if (urn.getUrn() == null) {
                         Helper.addMessageToProcessLog(step.getProcessId(), LogType.ERROR,
                                 "The database entry with ID" + urn.getId() + " has no urn-value!");
-                        //TODO throw Exception
+                        throw new IllegalArgumentException("The urn value of the urn entry with id "+urn.getId()+" was null!");
                     }
                 } else {
                     myNewUrn = urnGenerator.generateUrn(namespace, infix, urn);
@@ -323,8 +323,9 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                         TimeUnit.SECONDS.sleep(2);
                         Helper.addMessageToProcessLog(step.getProcessId(), LogType.DEBUG, "URN-Generation to fast had to wait a few seconds!");
                         myNewUrn = urnGenerator.generateUrn(namespace, infix, urn);
-                        if (breakcount++ > 2)
-                            throw new IllegalArgumentException("This should never happen");
+                        if (breakcount++ > 2) {
+                            throw new IllegalArgumentException("Tried to create an existing urn 4 times. ");
+                        }
                     }
 
                     try {
