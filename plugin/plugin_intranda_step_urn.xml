@@ -29,14 +29,15 @@
 			timestamp if you want to use a timestamp (2042-09-23-06-30-15) to generate the part after the infix
 			default method is increment!
 		  -->
-		<urnGenerationMethod>timestamp</urnGenerationMethod>
+		<generationMethod>timestamp</generationMethod>
 		
 		<!-- optional Element, 
 			false if you don't want URNs with a Checksum
 			true if you want URNs with a Checksum
 		 -->
-		<generateChecksum>false</generateChecksum>
-		<!-- example URN urn:nbn:de:{SIGIL}-goobi-20220404122233 -->
+		<checksum>false</checksum>
+	
+		<!-- example URN urn:nbn:de:{SIGIL}-goobi-2022-04-04-123 -->
 
 		<!--target url the newly generated urn will forward to. {pi.urn} will be 
 			replaced with the newly minted urn -->
