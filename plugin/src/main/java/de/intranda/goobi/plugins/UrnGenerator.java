@@ -137,8 +137,8 @@ public class UrnGenerator {
      * creates a timestamp
      * @return String with timestamp
      */
-    private static String generateTimeStamp() {
-        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuu-MM-dd-hh-mm-ss");
+    public static String generateTimeStamp() {
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuu-MM-dd-HH-mm-ss");
         //maybe switch to INSTANT here (UTC)
         LocalDateTime localDate = LocalDateTime.now();
         String timeStamp = dtf.format(localDate);
