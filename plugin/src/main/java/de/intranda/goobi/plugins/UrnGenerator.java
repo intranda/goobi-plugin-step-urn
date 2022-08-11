@@ -28,14 +28,16 @@ public class UrnGenerator {
     private final String WORKID_COLUMN_NAME = "werk_id";
     private final String STRUCT_COLUMN_NAME = "struktur_typ";
     private final String URN_COLUMN_NAME = "urn";
+    private int processId;
     @Getter
     private UrnGenerationMethod urnGenerationMethod;
     private boolean generateChecksum = false;
 
-    public UrnGenerator(UrnGenerationMethod ugm, boolean generateChecksum) throws SQLException {
+    public UrnGenerator(UrnGenerationMethod ugm, boolean generateChecksum, int processId) throws SQLException {
         if (ugm == null)
             throw new IllegalArgumentException("Please specify a valid UrnGenerationMethod in the configuration file!");
         this.generateChecksum = generateChecksum;
+        this.processId = processId;
         urnGenerationMethod = ugm;
         con = MySQLHelper.getInstance().getConnection();
     }
@@ -98,7 +100,6 @@ public class UrnGenerator {
             sLock2.executeUpdate("UNLOCK TABLES;");
             sLock2.close();
         } catch (SQLException ex) {
-            ex.printStackTrace();
             Statement unLock = con.createStatement();
             unLock.executeUpdate("UNLOCK TABLES;");
             unLock.close();
@@ -175,7 +176,7 @@ public class UrnGenerator {
             deleteQuery.executeUpdate();
             deleteQuery.close();
         } catch (SQLException ex) {
-            log.error(ex);
+            log.error("URN PLUGIN: Removing incomplete URN-Entry with ID: "+urnId+" from Database failed! - ProcessID: "+this.processId,ex);
             return false;
         }
         return true;
@@ -193,7 +194,7 @@ public class UrnGenerator {
                     result= true;
                 updateUrnQuery.close();
             } catch (SQLException ex) {
-                log.error(ex);
+                log.error("URN PLUGIN: Writing URN: "+ urn.getUrn() + " to the Database failed.The Database Entry with urn_id: "+urn.getId() + "is now in an invalid State! - ProcessID:" + this.processId ,ex);
                 return false;
             }
             return result;
@@ -215,7 +216,7 @@ public class UrnGenerator {
             //if a result was returned there was a duplicate!
             return result;
         } catch (SQLException ex) {
-            log.error(ex);
+            log.error("URN PLUGIN: SQLException when trying to find a duplicate! - ProcessID: "+this.processId, ex);
             //shouldn't happen better try again with a new urn
             return true;
         }
