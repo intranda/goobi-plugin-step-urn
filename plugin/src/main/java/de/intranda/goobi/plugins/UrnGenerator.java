@@ -171,7 +171,7 @@ public class UrnGenerator {
     public boolean removeUrnId(int urnId) {
 
         try {
-            PreparedStatement deleteQuery = con.prepareStatement("DELETE FROM " + URN_TABLE_NAME + "WHERE " + URNID_COLUMN_NAME + "=?;");
+            PreparedStatement deleteQuery = con.prepareStatement("DELETE FROM " + URN_TABLE_NAME + " WHERE " + URNID_COLUMN_NAME + "=?;");
             deleteQuery.setInt(1, urnId);
             deleteQuery.executeUpdate();
             deleteQuery.close();
