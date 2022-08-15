@@ -134,17 +134,18 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
     }
     
     private void log(String message, LogType logType ) {
-        switch (logType) {
+       
+        String logmessage = "URN PLUGIN: " + message;
+        switch (logType) {        
             case INFO:
-                log.info("URN PLUGIN: " + message + " - ProcessID:" + this.processId);
+                log.info(logmessage + " - ProcessID:" + this.processId);
                 break;
             case ERROR:
-                log.error("URN PLUGIN: " + message + " - ProcessID:" + this.processId);
-                break;
-            
+                log.error(logmessage + " - ProcessID:" + this.processId);
+                break;   
         } 
-        if (this.processId>0 && logType != LogType.INFO) {
-            Helper.addMessageToProcessLog(step.getProcessId(), logType, message);
+        if (this.processId>0) {
+            Helper.addMessageToProcessLog(step.getProcessId(), logType, logmessage);
         }    
     }
 
