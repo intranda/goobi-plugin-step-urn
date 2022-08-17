@@ -41,7 +41,6 @@ import org.goobi.production.plugin.interfaces.IStepPluginVersion2;
 
 import com.google.gson.JsonSyntaxException;
 
-import de.intranda.ugh.extension.util.DocstructConfigurationItem;
 import de.sub.goobi.config.ConfigPlugins;
 import de.sub.goobi.helper.Helper;
 import de.sub.goobi.helper.VariableReplacer;
@@ -335,7 +334,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                     int breakcount = 0;
                     while (urnGenerationMethod == UrnGenerationMethod.TIMESTAMP && urnGenerator.findDuplicate(myNewUrn)) {
                         TimeUnit.SECONDS.sleep(2);
-                        Helper.addMessageToProcessLog(step.getProcessId(), LogType.DEBUG, "URN: Generation to fast, had to wait a few seconds");
+                        log("URN Generation to fast, had to wait a few seconds",LogType.DEBUG);
                         myNewUrn = urnGenerator.generateUrn(namespace, infix, urn);
                         if (breakcount++ > 2) {
                             throw new IllegalArgumentException("URN: Tried to create an already existing URN 4 times");
@@ -376,8 +375,8 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                     logical.addMetadata(md2);
                 }
 
-                Helper.addMessageToProcessLog(step.getProcessId(), LogType.INFO,
-                        "URN: " + urn.getUrn() + " was created successfully");
+                log("URN: " + urn.getUrn() + " was created successfully", LogType.INFO);
+                        
 
                 // maybe it's better to save the mets file
                 // only once but risk loosing a URN?
