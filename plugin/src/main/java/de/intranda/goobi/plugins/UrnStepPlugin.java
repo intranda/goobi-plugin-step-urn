@@ -289,13 +289,13 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
             md.setValue(modsUrn);
             logical.addMetadata(md);
             successful = true;
-            log("URN: Found MODS-URN, copy value to METS", LogType.INFO);
+            log("Found MODS-URN, copy value to METS", LogType.INFO);
         }
 
         if (metsUrn != null) {
             foundExistingUrn = true;
             if (modsUrn != null && !metsUrn.equals(modsUrn)) {
-                log("URN: There were different values for METS and MODS URN for the same Element",LogType.INFO);
+                log("There were different values for METS and MODS URN for the same Element",LogType.INFO);
             }
             if (metsUrn.startsWith(namespace)) {
                 successful = urnClient.replaceUrls(metsUrn, urls);
@@ -325,7 +325,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                 if (urn.isOldEntry()) {
                     myNewUrn = urn.getUrn();
                     if (urn.getUrn() == null) {
-                        log("URN: The database entry with ID" + urn.getId() + " has no urn-value",LogType.ERROR);
+                        log("The database entry with ID" + urn.getId() + " has no urn-value",LogType.ERROR);
                         throw new IllegalArgumentException("The urn-value of the database entry with ID "+urn.getId()+" was null");
                     }
                 } else {
@@ -346,8 +346,8 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                         if (myNewUrn.equals(urnClient.registerUrn(myNewUrn, urls))) {
                             urn.setUrn(myNewUrn);
                             if (!urnGenerator.writeUrnToDatabase(urn)) {
-                                Helper.addMessageToProcessLog(step.getProcessId(), LogType.ERROR,
-                                        "URN: The database entry with ID" + urn.getId() + " could not be updated with the new URN: " + urn.getUrn());
+                                log("The database entry with ID" + urn.getId() + " could not be updated with the new URN: " + urn.getUrn(),LogType.ERROR);
+                            } else {
                                 successful = true;
                             }
                         }
@@ -357,7 +357,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                         successful = false;
                         if (!urn.isOldEntry()) {
                             urnGenerator.removeUrnId(urn.getId());
-                            log( "URN: Couldn't register URN: " + urn.getUrn() + "with ID: " + urn.getId() + " was removed from database", LogType.ERROR);
+                            log( "Couldn't register URN: " + urn.getUrn() + "with ID: " + urn.getId() + " was removed from database", LogType.ERROR);
                             throw ex;
                         } else {
                             successful = true;
@@ -384,7 +384,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                 step.getProzess().writeMetadataFile(ff);
                 successful = true;
             } else {
-                log("URN: No URN was created because the metada type was not allowed",LogType.ERROR);
+                log("No URN was created because the metada type was not allowed",LogType.ERROR);
                 successful = false;
             }
         }
@@ -419,10 +419,10 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
         }
         
         if (!successful) {
-            log("URN: Errors occured executing the URN Plugin", LogType.INFO);
+            log("Errors occured executing the URN Plugin", LogType.INFO);
             return PluginReturnValue.ERROR;
         }
-        log("URN: Registering and writing URNs was successfull", LogType.INFO);
+        log("Registering and writing URNs was successfull", LogType.INFO);
         return PluginReturnValue.FINISH;
     }
 }
