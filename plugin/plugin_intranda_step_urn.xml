@@ -14,7 +14,7 @@
 		<!-- password of the API user -->
 		<apiPassword>password</apiPassword>
 
-		<!-- URI of the URN API, must use httos -->
+		<!-- URI of the URN API, must use https -->
 		<apiUri>https://api.nbn-resolving.org/v2/</apiUri>
 
 		<!-- namespace in which new URNs shall be created -->
