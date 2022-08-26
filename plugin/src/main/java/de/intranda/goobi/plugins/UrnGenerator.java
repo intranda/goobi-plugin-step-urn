@@ -22,19 +22,20 @@ import ugh.dl.DocStructType;
 @Log4j2
 public class UrnGenerator {
     private static HashMap<Character, Integer> checksumConversionTable = initializeUrnChecksumConversionTable();
-    private final String URN_TABLE_NAME = "urn_table";
-    private final String URNID_COLUMN_NAME = "urn_id";
-    private final String WORKID_COLUMN_NAME = "werk_id";
-    private final String STRUCT_COLUMN_NAME = "struktur_typ";
-    private final String URN_COLUMN_NAME = "urn";
+    private static final String URN_TABLE_NAME = "urn_table";
+    private static final String URNID_COLUMN_NAME = "urn_id";
+    private static final String WORKID_COLUMN_NAME = "werk_id";
+    private static final String STRUCT_COLUMN_NAME = "struktur_typ";
+    private static final String URN_COLUMN_NAME = "urn";
     private int processId;
     @Getter
     private UrnGenerationMethod urnGenerationMethod;
     private boolean generateChecksum = false;
 
-    public UrnGenerator(UrnGenerationMethod ugm, boolean generateChecksum, int processId) throws SQLException {
-        if (ugm == null)
+    public UrnGenerator(UrnGenerationMethod ugm, boolean generateChecksum, int processId) {
+        if (ugm == null) {
             throw new IllegalArgumentException("Please specify a valid UrnGenerationMethod in the configuration file!");
+        }
         this.generateChecksum = generateChecksum;
         this.processId = processId;
         urnGenerationMethod = ugm;
@@ -63,35 +64,37 @@ public class UrnGenerator {
         } else {
             structType = struct.getName();
         }
-        
+
         Connection con = null;
         try {
             con = MySQLHelper.getInstance().getConnection();
-            Statement sLock = con.createStatement();
-            // lock table in order to prevent race conditions
-            sLock.executeUpdate("LOCK TABLE " + URN_TABLE_NAME + " WRITE");
-            sLock.close();
+            try (Statement sLock = con.createStatement()) {
+                // lock table in order to prevent race conditions
+                sLock.executeUpdate("LOCK TABLE " + URN_TABLE_NAME + " WRITE");
+            }
 
-            if (struct.isAnchor() || struct.isTopmost()) {
-                PreparedStatement sQuery1 = con.prepareStatement("SELECT " + URNID_COLUMN_NAME + " ," + URN_COLUMN_NAME + " FROM " + URN_TABLE_NAME
-                        + " WHERE " + WORKID_COLUMN_NAME + " = ? AND " + STRUCT_COLUMN_NAME + " = ? ;", ResultSet.TYPE_SCROLL_INSENSITIVE,
-                        ResultSet.CONCUR_UPDATABLE);
-                sQuery1.setString(1, workID);
-                sQuery1.setString(2, structType);
-                ResultSet resultS = sQuery1.executeQuery();
-                resultS.last();
-                if (resultS.getRow() > 1) { // DB contains unique structType-workID combination multiple times
-                    throw new UrnDatabaseException("URN database in inconsistent state");
+            if (struct != null && (struct.isAnchor() || struct.isTopmost())) {
+                try (PreparedStatement sQuery1 =
+                        con.prepareStatement(
+                                "SELECT " + URNID_COLUMN_NAME + " ," + URN_COLUMN_NAME + " FROM " + URN_TABLE_NAME + " WHERE " + WORKID_COLUMN_NAME
+                                + " = ? AND " + STRUCT_COLUMN_NAME + " = ? ;",
+                                ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_UPDATABLE)) {
+                    sQuery1.setString(1, workID);
+                    sQuery1.setString(2, structType);
+                    ResultSet resultS = sQuery1.executeQuery();
+                    resultS.last();
+                    if (resultS.getRow() > 1) { // DB contains unique structType-workID combination multiple times
+                        throw new UrnDatabaseException("URN database in inconsistent state");
+                    }
+                    if (resultS.getRow() == 1) { // DB contains structType-workID combination already. No insertion.
+                        resultInt = resultS.getInt(URNID_COLUMN_NAME);
+                        urn = resultS.getString(URN_COLUMN_NAME);
+                        oldEntry = true;
+                    }
+                    if (resultS.getRow() == 0) { // DB does not contain structType-workID combination. Insert the new row.
+                        resultInt = createNewDbEntry(workID, structType, con);
+                    }
                 }
-                if (resultS.getRow() == 1) { // DB contains structType-workID combination already. No insertion.
-                    resultInt = resultS.getInt(URNID_COLUMN_NAME);
-                    urn = resultS.getString(URN_COLUMN_NAME);
-                    oldEntry = true;
-                }
-                if (resultS.getRow() == 0) { // DB does not contain structType-workID combination. Insert the new row.
-                    resultInt = createNewDbEntry(workID, structType, con);
-                }
-                sQuery1.close();
             } else { // multiple entries of same structType-workID combination possible
                 resultInt = createNewDbEntry(workID, structType, con);
             }
@@ -99,9 +102,9 @@ public class UrnGenerator {
             throw new SQLException("Error getting urn data from database", ex);
         } finally {
             if (con != null) {
-                Statement unLock = con.createStatement();
-                unLock.executeUpdate("UNLOCK TABLES;");
-                unLock.close();
+                try (Statement unLock = con.createStatement()) {
+                    unLock.executeUpdate("UNLOCK TABLES;");
+                }
                 returnConnectionToPool(con);
             }
         }
@@ -109,8 +112,7 @@ public class UrnGenerator {
     }
 
     /**
-     * Helper Method of getUrnId 
-     * Create a new Database Entry in the urn_table and return the key of the new row
+     * Helper Method of getUrnId Create a new Database Entry in the urn_table and return the key of the new row
      * 
      * @param workID
      * @param structType the structure type
@@ -119,9 +121,9 @@ public class UrnGenerator {
      */
     private int createNewDbEntry(String workID, String structType, Connection con) throws SQLException {
         int resultInt = -1;
-            PreparedStatement sUpdate1 = con.prepareStatement(
-                    "INSERT INTO " + URN_TABLE_NAME + "(" + WORKID_COLUMN_NAME + "," + STRUCT_COLUMN_NAME + ")" + " VALUES(?,?);",
-                    Statement.RETURN_GENERATED_KEYS);
+        try (PreparedStatement sUpdate1 =
+                con.prepareStatement("INSERT INTO " + URN_TABLE_NAME + "(" + WORKID_COLUMN_NAME + "," + STRUCT_COLUMN_NAME + ")" + " VALUES(?,?);",
+                        Statement.RETURN_GENERATED_KEYS)) {
             sUpdate1.setString(1, workID);
             sUpdate1.setString(2, structType);
             sUpdate1.executeUpdate();
@@ -131,7 +133,7 @@ public class UrnGenerator {
             } else {
                 throw new SQLException("Could not retreive newly generated URN from database");
             }
-            sUpdate1.close();
+        }
         return resultInt;
     }
 
@@ -144,8 +146,7 @@ public class UrnGenerator {
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuu-MM-dd-HH-mm-ss");
         //maybe switch to INSTANT here (UTC)
         LocalDateTime localDate = LocalDateTime.now();
-        String timeStamp = dtf.format(localDate);
-        return timeStamp;
+        return dtf.format(localDate);
     }
 
     public String generateUrn(String prefix, String infix, Urn urn) {
@@ -155,13 +156,10 @@ public class UrnGenerator {
         if (!StringUtils.isBlank(infix)) {
             sb.append(infix);
         }
-        switch (urnGenerationMethod) {
-            case INCREMENT:
-                sb.append(urn.getId());
-                break;
-            case TIMESTAMP:
-                sb.append(generateTimeStamp());
-                break;
+        if (urnGenerationMethod == UrnGenerationMethod.INCREMENT) {
+            sb.append(urn.getId());
+        } else {
+            sb.append(generateTimeStamp());
         }
         if (generateChecksum) {
             sb.append(calculateUrnChecksum(sb.toString()));
@@ -173,10 +171,10 @@ public class UrnGenerator {
         Connection con = null;
         try {
             con = MySQLHelper.getInstance().getConnection();
-            PreparedStatement deleteQuery = con.prepareStatement("DELETE FROM " + URN_TABLE_NAME + " WHERE " + URNID_COLUMN_NAME + "=?;");
-            deleteQuery.setInt(1, urnId);
-            deleteQuery.executeUpdate();
-            deleteQuery.close();
+            try (PreparedStatement deleteQuery = con.prepareStatement("DELETE FROM " + URN_TABLE_NAME + " WHERE " + URNID_COLUMN_NAME + "=?;")) {
+                deleteQuery.setInt(1, urnId);
+                deleteQuery.executeUpdate();
+            }
         } catch (SQLException ex) {
             log.error("URN PLUGIN: Removing incomplete URN-Entry with ID: " + urnId + " from Database failed! - ProcessID: " + this.processId, ex);
             return false;
@@ -203,16 +201,17 @@ public class UrnGenerator {
             if (!urn.isOldEntry()) {
                 boolean result = false;
                 try {
-                    PreparedStatement updateUrnQuery = con
-                            .prepareStatement("UPDATE " + URN_TABLE_NAME + " SET " + URN_COLUMN_NAME + "=?" + " WHERE " + URNID_COLUMN_NAME + "=?");
-                    updateUrnQuery.setString(1, urn.getUrn());
-                    updateUrnQuery.setInt(2, urn.getId());
-                    if (updateUrnQuery.executeUpdate() > 0)
-                        result = true;
-                    updateUrnQuery.close();
+                    try (PreparedStatement updateUrnQuery = con
+                            .prepareStatement("UPDATE " + URN_TABLE_NAME + " SET " + URN_COLUMN_NAME + "=?" + " WHERE " + URNID_COLUMN_NAME + "=?")) {
+                        updateUrnQuery.setString(1, urn.getUrn());
+                        updateUrnQuery.setInt(2, urn.getId());
+                        if (updateUrnQuery.executeUpdate() > 0) {
+                            result = true;
+                        }
+                    }
                 } catch (SQLException ex) {
                     log.error("URN PLUGIN: Writing URN: " + urn.getUrn() + " to the Database failed.The Database Entry with urn_id: " + urn.getId()
-                            + "is now in an invalid State! - ProcessID:" + this.processId, ex);
+                    + "is now in an invalid State! - ProcessID:" + this.processId, ex);
                     return false;
                 }
                 return result;
@@ -227,16 +226,17 @@ public class UrnGenerator {
 
     public boolean findDuplicate(String urn) {
         Connection con = null;
+        boolean result = false;
         try {
             con = MySQLHelper.getInstance().getConnection();
-            PreparedStatement checkQuery =
+            try (PreparedStatement checkQuery =
                     con.prepareStatement("SELECT " + URNID_COLUMN_NAME + " FROM " + URN_TABLE_NAME + " WHERE " + URN_COLUMN_NAME + "=?",
-                            ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_UPDATABLE);
-            checkQuery.setString(1, urn);
-            ResultSet resultS = checkQuery.executeQuery();
-            resultS.last();
-            boolean result = resultS.getRow() >= 1;
-            checkQuery.close();
+                            ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_UPDATABLE)) {
+                checkQuery.setString(1, urn);
+                ResultSet resultS = checkQuery.executeQuery();
+                resultS.last();
+                result = resultS.getRow() >= 1;
+            }
             //if a result was returned there was a duplicate!
             return result;
         } catch (SQLException ex) {
@@ -264,7 +264,7 @@ public class UrnGenerator {
         int result = -1; // default (illegal) value
         urn = urn.toUpperCase();
         char[] urnChars = urn.toCharArray();
-        List<Integer> digits = new ArrayList<Integer>(urnChars.length * 2);
+        List<Integer> digits = new ArrayList<>(urnChars.length * 2);
 
         for (char c : urnChars) {
             if (checksumConversionTable.get(c) == null) {
@@ -293,7 +293,7 @@ public class UrnGenerator {
      * @return see http://www.persistent-identifier.de/?link=316
      */
     private static HashMap<Character, Integer> initializeUrnChecksumConversionTable() {
-        HashMap<Character, Integer> res = new HashMap<Character, Integer>();
+        HashMap<Character, Integer> res = new HashMap<>();
         res.put('0', 1);
         res.put('1', 2);
         res.put('2', 3);
