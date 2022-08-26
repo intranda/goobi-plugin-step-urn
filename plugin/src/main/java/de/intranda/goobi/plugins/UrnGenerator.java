@@ -21,7 +21,6 @@ import ugh.dl.DocStructType;
 
 @Log4j2
 public class UrnGenerator {
-    private Connection con;
     private static HashMap<Character, Integer> checksumConversionTable = initializeUrnChecksumConversionTable();
     private final String URN_TABLE_NAME = "urn_table";
     private final String URNID_COLUMN_NAME = "urn_id";
@@ -39,12 +38,11 @@ public class UrnGenerator {
         this.generateChecksum = generateChecksum;
         this.processId = processId;
         urnGenerationMethod = ugm;
-        con = MySQLHelper.getInstance().getConnection();
     }
 
     /**
-     * Either adds the new element to the database and returns the newly created UrnID or just leaves the database unchanged and returns the
-     * corresponding UrnId If the element is not listed there, it is always added to the database and a newly generated URN is returned.
+     * Either adds the new element to the database and returns the newly created Urn with UrnId or just leaves the database unchanged and returns the
+     * corresponding Urn. If the element is not listed there, it is always added to the database and a newly generated URN is returned.
      * 
      * @param workID id of the work (ppn), null will be replaced with empty string
      * @param structType structure type of the work ('Chapter' ...), null will be replaced with empty string
@@ -65,10 +63,12 @@ public class UrnGenerator {
         } else {
             structType = struct.getName();
         }
-        // lock table in order to prevent race conditions
-
-        Statement sLock = con.createStatement();
+        
+        Connection con = null;
         try {
+            con = MySQLHelper.getInstance().getConnection();
+            Statement sLock = con.createStatement();
+            // lock table in order to prevent race conditions
             sLock.executeUpdate("LOCK TABLE " + URN_TABLE_NAME + " WRITE");
             sLock.close();
 
@@ -89,53 +89,55 @@ public class UrnGenerator {
                     oldEntry = true;
                 }
                 if (resultS.getRow() == 0) { // DB does not contain structType-workID combination. Insert the new row.
-                    resultInt = createNewDbEntry(workID, structType);
+                    resultInt = createNewDbEntry(workID, structType, con);
                 }
                 sQuery1.close();
             } else { // multiple entries of same structType-workID combination possible
-                resultInt = createNewDbEntry(workID, structType);
+                resultInt = createNewDbEntry(workID, structType, con);
             }
-
-            Statement sLock2 = con.createStatement();
-            sLock2.executeUpdate("UNLOCK TABLES;");
-            sLock2.close();
         } catch (SQLException ex) {
-            Statement unLock = con.createStatement();
-            unLock.executeUpdate("UNLOCK TABLES;");
-            unLock.close();
             throw new SQLException("Error getting urn data from database", ex);
+        } finally {
+            if (con != null) {
+                Statement unLock = con.createStatement();
+                unLock.executeUpdate("UNLOCK TABLES;");
+                unLock.close();
+                returnConnectionToPool(con);
+            }
         }
         return new Urn(resultInt, urn, oldEntry);
     }
 
     /**
+     * Helper Method of getUrnId 
      * Create a new Database Entry in the urn_table and return the key of the new row
-     * @param workID    
+     * 
+     * @param workID
      * @param structType the structure type
      * @return key of the new row
-     * @throws SQLException 
+     * @throws SQLException
      */
-    private int createNewDbEntry(String workID, String structType) throws SQLException {
+    private int createNewDbEntry(String workID, String structType, Connection con) throws SQLException {
         int resultInt = -1;
-        PreparedStatement sUpdate1 =
-                con.prepareStatement("INSERT INTO " + URN_TABLE_NAME + "(" + WORKID_COLUMN_NAME + "," + STRUCT_COLUMN_NAME + ")" + " VALUES(?,?);",
-                        Statement.RETURN_GENERATED_KEYS);
-        sUpdate1.setString(1, workID);
-        sUpdate1.setString(2, structType);
-        sUpdate1.executeUpdate();
-        ResultSet rs = sUpdate1.getGeneratedKeys();
-        if (rs.next()) {
-            resultInt = rs.getInt(1);
-        } else {
-            throw new SQLException("Could not retreive newly generated URN from database");
-        }
-        sUpdate1.close();
+            PreparedStatement sUpdate1 = con.prepareStatement(
+                    "INSERT INTO " + URN_TABLE_NAME + "(" + WORKID_COLUMN_NAME + "," + STRUCT_COLUMN_NAME + ")" + " VALUES(?,?);",
+                    Statement.RETURN_GENERATED_KEYS);
+            sUpdate1.setString(1, workID);
+            sUpdate1.setString(2, structType);
+            sUpdate1.executeUpdate();
+            ResultSet rs = sUpdate1.getGeneratedKeys();
+            if (rs.next()) {
+                resultInt = rs.getInt(1);
+            } else {
+                throw new SQLException("Could not retreive newly generated URN from database");
+            }
+            sUpdate1.close();
         return resultInt;
     }
 
-    
     /**
      * creates a timestamp
+     * 
      * @return String with timestamp
      */
     public static String generateTimeStamp() {
@@ -167,47 +169,69 @@ public class UrnGenerator {
         return sb.toString();
     }
 
-
     public boolean removeUrnId(int urnId) {
-
+        Connection con = null;
         try {
+            con = MySQLHelper.getInstance().getConnection();
             PreparedStatement deleteQuery = con.prepareStatement("DELETE FROM " + URN_TABLE_NAME + " WHERE " + URNID_COLUMN_NAME + "=?;");
             deleteQuery.setInt(1, urnId);
             deleteQuery.executeUpdate();
             deleteQuery.close();
         } catch (SQLException ex) {
-            log.error("URN PLUGIN: Removing incomplete URN-Entry with ID: "+urnId+" from Database failed! - ProcessID: "+this.processId,ex);
+            log.error("URN PLUGIN: Removing incomplete URN-Entry with ID: " + urnId + " from Database failed! - ProcessID: " + this.processId, ex);
             return false;
+        } finally {
+            returnConnectionToPool(con);
         }
         return true;
     }
 
-    public boolean writeUrnToDatabase(Urn urn) {
-        if (!urn.isOldEntry()) {
-            boolean result = false;
-            try {
-                PreparedStatement updateUrnQuery =
-                        con.prepareStatement("UPDATE " + URN_TABLE_NAME + " SET " + URN_COLUMN_NAME + "=?" + " WHERE " + URNID_COLUMN_NAME + "=?");
-                updateUrnQuery.setString(1, urn.getUrn());
-                updateUrnQuery.setInt(2, urn.getId());
-                if (updateUrnQuery.executeUpdate()>0)
-                    result= true;
-                updateUrnQuery.close();
-            } catch (SQLException ex) {
-                log.error("URN PLUGIN: Writing URN: "+ urn.getUrn() + " to the Database failed.The Database Entry with urn_id: "+urn.getId() + "is now in an invalid State! - ProcessID:" + this.processId ,ex);
+    private void returnConnectionToPool(Connection con) {
+        try {
+            if (con != null) {
+                MySQLHelper.closeConnection(con);
+            }
+        } catch (SQLException ex) {
+            log.error("URN PLUGIN: There was an error closing the  database connection - ProcessID: " + this.processId, ex);
+        }
+    }
+
+    public boolean writeUrnToDatabase(Urn urn) throws SQLException {
+        Connection con = null;
+        try {
+            con = MySQLHelper.getInstance().getConnection();
+            if (!urn.isOldEntry()) {
+                boolean result = false;
+                try {
+                    PreparedStatement updateUrnQuery = con
+                            .prepareStatement("UPDATE " + URN_TABLE_NAME + " SET " + URN_COLUMN_NAME + "=?" + " WHERE " + URNID_COLUMN_NAME + "=?");
+                    updateUrnQuery.setString(1, urn.getUrn());
+                    updateUrnQuery.setInt(2, urn.getId());
+                    if (updateUrnQuery.executeUpdate() > 0)
+                        result = true;
+                    updateUrnQuery.close();
+                } catch (SQLException ex) {
+                    log.error("URN PLUGIN: Writing URN: " + urn.getUrn() + " to the Database failed.The Database Entry with urn_id: " + urn.getId()
+                            + "is now in an invalid State! - ProcessID:" + this.processId, ex);
+                    return false;
+                }
+                return result;
+            } else {
+                //old entries should not get updated!
                 return false;
             }
-            return result;
-        } else {
-            //old entries should not get updated!
-            return false;
+        } finally {
+            returnConnectionToPool(con);
         }
     }
 
     public boolean findDuplicate(String urn) {
+        Connection con = null;
         try {
-            PreparedStatement checkQuery = con.prepareStatement("SELECT "+ URNID_COLUMN_NAME +" FROM " + URN_TABLE_NAME + " WHERE " + URN_COLUMN_NAME + "=?",ResultSet.TYPE_SCROLL_INSENSITIVE,
-                    ResultSet.CONCUR_UPDATABLE);
+            con = MySQLHelper.getInstance().getConnection();
+            PreparedStatement checkQuery =
+                    con.prepareStatement("SELECT " + URNID_COLUMN_NAME + " FROM " + URN_TABLE_NAME + " WHERE " + URN_COLUMN_NAME + "=?",
+                            ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_UPDATABLE);
             checkQuery.setString(1, urn);
             ResultSet resultS = checkQuery.executeQuery();
             resultS.last();
@@ -216,9 +240,11 @@ public class UrnGenerator {
             //if a result was returned there was a duplicate!
             return result;
         } catch (SQLException ex) {
-            log.error("URN PLUGIN: SQLException when trying to find a duplicate! - ProcessID: "+this.processId, ex);
+            log.error("URN PLUGIN: SQLException when trying to find a duplicate! - ProcessID: " + this.processId, ex);
             //shouldn't happen better try again with a new urn
             return true;
+        } finally {
+            returnConnectionToPool(con);
         }
     }
 
