@@ -41,8 +41,7 @@
 
 		<!--target url the newly generated urn will forward to. {pi.urn} will be 
 			replaced with the newly minted urn -->
-		<publicationUrl>https://viewer.example.org/viewer/resolver?urn={pi.urn}
-		</publicationUrl>
+		<url>https://viewer.example.org/viewer/resolver?urn={pi.urn}</url>
 
 		<!--Generate URN for the work (e.g. for Monograph, Manuscript, Volume, etc.)  -->
 		<work>true</work>
