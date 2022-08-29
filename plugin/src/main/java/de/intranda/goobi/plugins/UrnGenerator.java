@@ -143,7 +143,7 @@ public class UrnGenerator {
      * @return String with timestamp
      */
     public static String generateTimeStamp() {
-        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuu-MM-dd-HH-mm-ss");
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuuMMddHHmmss");
         //maybe switch to INSTANT here (UTC)
         LocalDateTime localDate = LocalDateTime.now();
         return dtf.format(localDate);
@@ -156,10 +156,10 @@ public class UrnGenerator {
         if (!StringUtils.isBlank(infix)) {
             sb.append(infix);
         }
-        if (urnGenerationMethod == UrnGenerationMethod.INCREMENT) {
-            sb.append(urn.getId());
-        } else {
+        if (urnGenerationMethod == UrnGenerationMethod.TIMESTAMP) {
             sb.append(generateTimeStamp());
+        } else {
+            sb.append(urn.getId());
         }
         if (generateChecksum) {
             sb.append(calculateUrnChecksum(sb.toString()));

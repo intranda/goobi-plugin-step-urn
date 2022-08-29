@@ -12,7 +12,7 @@ public class UrnGeneratorTest {
     @Test
    public void testGenerateTimeStamp() {
         String TimeStamp = UrnGenerator.generateTimeStamp();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("uuuu-MM-dd-HH-mm-ss");
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("uuuuMMddHHmmss");
 
         try {
             LocalDateTime dateTime = LocalDateTime.parse(TimeStamp,formatter);
