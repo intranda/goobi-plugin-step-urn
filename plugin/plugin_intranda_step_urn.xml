@@ -22,7 +22,7 @@
 		<namespace>urn:nbn:de:{SIGIL}</namespace>
 
 		<!-- infix that you want to use (optional) -->
-		<infix>goobi-</infix>
+		<infix></infix>
 		
 		<!-- optional Element, 
 			increment if you want to use incrementation (300,301,302...) to generate the part after the infix

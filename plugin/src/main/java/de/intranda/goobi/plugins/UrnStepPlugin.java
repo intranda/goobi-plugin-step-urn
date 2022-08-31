@@ -128,7 +128,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
         // read Array with allowed elements from configuration
         allowedTypes = myconfig.getStringArray("allowed/type");
         publicationUrl = myconfig.getString("url", "https://viewer.example.org/viewer/resolver?urn={pi.urn}");
-        infix = myconfig.getString("infix");
+        infix = myconfig.getString("infix",null);
         log.info("URN PLUGIN: Initialized - ProcessID:" + this.processId);
     }
     
