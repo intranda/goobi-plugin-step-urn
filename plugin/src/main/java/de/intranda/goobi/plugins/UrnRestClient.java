@@ -2,10 +2,13 @@
 package de.intranda.goobi.plugins;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Base64;
 
 import org.apache.http.HttpHeaders;
+import org.apache.http.HttpHost;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.fluent.Request;
 import org.apache.http.entity.ContentType;
@@ -17,16 +20,18 @@ import de.intranda.goobi.plugins.Messages.UrlListMessage;
 import de.intranda.goobi.plugins.Messages.UrnCreationMessage;
 import de.intranda.goobi.plugins.ResponseHandler.CreateResponseHandler;
 import de.intranda.goobi.plugins.ResponseHandler.PatchResponseHandler;
-import de.intranda.goobi.plugins.ResponseHandler.SuggestionResponseHandler;
-import ugh.dl.DocStructType;
+import de.sub.goobi.config.ConfigurationHelper;
+import lombok.extern.log4j.Log4j2;
 
+@Log4j2
 public class UrnRestClient {
 
     private String uri;
     private String auth;
     private String namespaceName;
-    private String infix;
     private Gson gson;
+    private boolean useProxy = false;
+    private HttpHost proxy;
 
     /**
      * @param Uri URL of the URN service
@@ -36,28 +41,26 @@ public class UrnRestClient {
      */
     public UrnRestClient(String Uri, String Namespace, String User, String Password) {
         this.auth = Base64.getEncoder().encodeToString((User.trim() + ":" + Password.trim()).getBytes());
-        if (!Uri.startsWith("https"))
+        if (!Uri.startsWith("https")) {
             throw new IllegalArgumentException("Bad URL - only https is permitted");
+        }
         uri = (!Uri.endsWith("/")) ? Uri + "/" : Uri;
         this.namespaceName = Namespace.trim();
         gson = new Gson();
-    }
-
-    /**
-     * asks for an urn-suggestion
-     * 
-     * @param namespaceName namespace in which the suggested URN ist located
-     * @return String URN-suggestion
-     * @throws ClientProtocolException
-     * @throws IOException
-     * @throws IllegalArgumentException
-     */
-    private String getUrnSuggestion() throws ClientProtocolException, IOException, IllegalArgumentException, JsonSyntaxException {
-
-        Request request = Request.Get(uri + "namespaces/name/" + namespaceName + "/urn-suggestion");
-        request = addHeaders(request);
-        String response = request.execute().handleResponse(new SuggestionResponseHandler());
-        return response;
+        ConfigurationHelper cHelper = ConfigurationHelper.getInstance();
+        if (cHelper.isUseProxy()) {
+            try {
+                URL url = new URL(uri);
+                if (!cHelper.isProxyWhitelisted(url)) {
+                    this.useProxy = cHelper.isUseProxy();
+                    this.proxy = new HttpHost(cHelper.getProxyUrl(), cHelper.getProxyPort());
+                } else {
+                    log.debug("URN PLUGIN: url was on proxy whitelist, no proxy used: " + uri);
+                }
+            } catch (MalformedURLException e) {
+                log.debug("URN PLUGIN: could not convert into URL: {} ", uri);
+            }
+        }
     }
 
     /**
@@ -69,12 +72,10 @@ public class UrnRestClient {
      * @throws IOException
      * @throws InterruptedException
      */
-    
-    public String registerUrn(String urn, ArrayList<String> urls)
-            throws ClientProtocolException, IOException, JsonSyntaxException {
+    public String registerUrn(String urn, ArrayList<String> urls) throws ClientProtocolException, IOException, JsonSyntaxException {
 
         Request request = Request.Post(uri + "urns");
-        request = addHeaders(request);
+        request = addHeadersAndProxy(request);
 
         String response = request.addHeader("Content-Type", "application/json")
                 .bodyString(createUrnBodyString(urn, urls), ContentType.APPLICATION_JSON)
@@ -98,12 +99,12 @@ public class UrnRestClient {
             throws ClientProtocolException, IOException, IllegalArgumentException, JsonSyntaxException {
 
         Request request = Request.Patch(uri + "urns/urn/" + urn + "/" + "my-urls");
-        request = addHeaders(request);
+        request = addHeadersAndProxy(request);
         String response = request.addHeader("Content-Type", "application/json")
                 .bodyString(replaceUrlsBodyString(urn, urls), ContentType.APPLICATION_JSON)
                 .execute()
                 .handleResponse(new PatchResponseHandler());
-        return response.equals("success");
+        return "success".equals(response);
     }
 
     /**
@@ -124,7 +125,7 @@ public class UrnRestClient {
      * @return arrayBuilder object
      */
     private ArrayList<UrlListMessage> createUrlList(String urn, ArrayList<String> urls) {
-        ArrayList<UrlListMessage> ulm = new ArrayList<UrlListMessage>();
+        ArrayList<UrlListMessage> ulm = new ArrayList<>();
         for (String url : urls) {
             ulm.add(new UrlListMessage().setUrl(url.replace("{pi.urn}", urn)));
         }
@@ -141,7 +142,7 @@ public class UrnRestClient {
      */
     private String createUrnBodyString(String Urn, ArrayList<String> urls) throws IOException {
         UrnCreationMessage createArk = new UrnCreationMessage();
-        ArrayList<UrlListMessage> ulm = new ArrayList<UrlListMessage>();
+        ArrayList<UrlListMessage> ulm = new ArrayList<>();
         createArk.setUrn(Urn);
         createArk.setUrls(createUrlList(Urn, urls));
         return gson.toJson(createArk);
@@ -153,8 +154,12 @@ public class UrnRestClient {
      * @param request Request Object which needs Authorization and Accept Headers
      * @return returns the Request with Authorization and Accept Header
      */
-    private Request addHeaders(Request request) {
-        return request.addHeader(HttpHeaders.AUTHORIZATION, "Basic " + auth).addHeader("Accept", "application/json");
+    private Request addHeadersAndProxy(Request request) {
+        if (this.useProxy) {
+            return request.addHeader(HttpHeaders.AUTHORIZATION, "Basic " + auth).addHeader("Accept", "application/json").viaProxy(this.proxy);
+        } else {
+            return request.addHeader(HttpHeaders.AUTHORIZATION, "Basic " + auth).addHeader("Accept", "application/json");
+        }
     }
 
 }
