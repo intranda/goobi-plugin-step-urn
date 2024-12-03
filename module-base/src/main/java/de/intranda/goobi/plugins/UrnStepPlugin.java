@@ -30,7 +30,6 @@ import java.util.concurrent.TimeUnit;
 import javax.json.JsonException;
 
 import org.apache.commons.configuration.SubnodeConfiguration;
-import org.apache.http.client.ClientProtocolException;
 import org.goobi.beans.Step;
 import org.goobi.production.enums.LogType;
 import org.goobi.production.enums.PluginGuiType;
@@ -46,7 +45,6 @@ import de.sub.goobi.helper.Helper;
 import de.sub.goobi.helper.VariableReplacer;
 import de.sub.goobi.helper.exceptions.DAOException;
 import de.sub.goobi.helper.exceptions.SwapException;
-
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import net.xeoh.plugins.base.annotations.PluginImplementation;
@@ -65,6 +63,7 @@ import ugh.exceptions.WriteException;
 @Log4j2
 public class UrnStepPlugin implements IStepPluginVersion2 {
 
+    private static final long serialVersionUID = -4947451667446416764L;
     @Getter
     private String title = "intranda_step_urn";
     @Getter
@@ -81,7 +80,6 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
     private boolean setAnchorUrn;
     private boolean successful = true;
 
-    private String metadataType;
     private String uri;
     private String namespace;
     private String apiUser;
@@ -91,19 +89,19 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
     private String infix;
     private boolean generateChecksum;
     private String[] allowedTypes;
-    private UrnRestClient urnClient;
-    private UrnGenerator urnGenerator;
-    private Fileformat ff;
+    private transient UrnRestClient urnClient;
+    private transient UrnGenerator urnGenerator;
+    private transient Fileformat ff;
     private ArrayList<String> urls;
     private UrnGenerationMethod urnGenerationMethod = null;
-    private int processId=-1;
+    private int processId = -1;
 
     @Override
     public void initialize(Step step, String returnPath) {
         this.returnPath = returnPath;
         this.step = step;
-        this.processId= step.getProcessId();
-        
+        this.processId = step.getProcessId();
+
         // read parameters from correct block in configuration file
         SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
         uri = myconfig.getString("apiUri", "https://api.nbn-resolving.org/v2/");
@@ -120,7 +118,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
         generateChecksum = myconfig.getBoolean("checksum", false);
         String urnGenerationMethodString = myconfig.getString("generationMethod", "increment");
         for (UrnGenerationMethod generationMethod : UrnGenerationMethod.values()) {
-            if (urnGenerationMethodString.toLowerCase().equals(generationMethod.toString().toLowerCase())) {
+            if (urnGenerationMethodString.equalsIgnoreCase(generationMethod.toString())) {
                 urnGenerationMethod = generationMethod;
             }
         }
@@ -128,24 +126,26 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
         // read Array with allowed elements from configuration
         allowedTypes = myconfig.getStringArray("allowed/type");
         publicationUrl = myconfig.getString("url", "https://viewer.example.org/viewer/resolver?urn={pi.urn}");
-        infix = myconfig.getString("infix",null);
+        infix = myconfig.getString("infix", null);
         log.info("URN PLUGIN: Initialized - ProcessID:" + this.processId);
     }
-    
-    private void log(String message, LogType logType ) {
-       
+
+    private void log(String message, LogType logType) {
+
         String logmessage = "URN PLUGIN: " + message;
-        switch (logType) {        
+        switch (logType) {
             case INFO:
                 log.info(logmessage + " - ProcessID:" + this.processId);
                 break;
             case ERROR:
                 log.error(logmessage + " - ProcessID:" + this.processId);
-                break;   
-        } 
-        if (this.processId>0) {
-            Helper.addMessageToProcessLog(step.getProcessId(), logType, logmessage);
-        }    
+                break;
+            default:
+                break;
+        }
+        if (this.processId > 0) {
+            Helper.addMessageToProcessJournal(step.getProcessId(), logType, logmessage);
+        }
     }
 
     @Override
@@ -180,7 +180,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
 
     @Override
     public HashMap<String, StepReturnValue> validate() {
-        return null;
+        return null; //NOSONAR
     }
 
     @Override
@@ -189,11 +189,11 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
         return ret != PluginReturnValue.ERROR;
     }
 
-    private void setUrn(DocStruct ds) throws JsonSyntaxException, ClientProtocolException, IllegalArgumentException, MetadataTypeNotAllowedException,
+    private void setUrn(DocStruct ds) throws JsonSyntaxException, IllegalArgumentException, MetadataTypeNotAllowedException,
             WriteException, PreferencesException, IOException, InterruptedException, SwapException, DAOException, SQLException, UrnDatabaseException {
 
         // always look for a ppn
-        if (ds.getAllMetadata() != null && ds.getAllMetadata().size() > 0) {
+        if (ds.getAllMetadata() != null && !ds.getAllMetadata().isEmpty()) {
             for (Metadata m : ds.getAllMetadata()) {
                 if (m.getType().equals(ppntype)) {
                     ppn = m.getValue();
@@ -201,11 +201,10 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
             }
         }
 
-        if (!isAllowedElement(ds.getType()) || ds.getType().getName().equals("boundbook")) {
+        if (!isAllowedElement(ds.getType()) || "boundbook".equals(ds.getType().getName())) {
             // do nothing, maybe we need other types without urn too?
-        } else {
-            if (!replaceUrlsOrAddUrn(ds))
-                successful = false;
+        } else if (!replaceUrlsOrAddUrn(ds)) {
+            successful = false;
         }
 
         // if there are elements on the whitelist work the whole tree
@@ -213,7 +212,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
         // the work urn
         if (allowedTypes.length > 0 || ds.getType().isAnchor()) {
             List<DocStruct> dsList = ds.getAllChildren();
-            if (dsList != null && dsList.size() > 0) {
+            if (dsList != null && !dsList.isEmpty()) {
                 for (DocStruct s : dsList) {
                     setUrn(s);
                 }
@@ -230,8 +229,9 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
      */
     private boolean isAllowedElement(DocStructType type) {
         // whitelist topmost and anchor-element
-        if ((type.isAnchor() && setAnchorUrn) || (type.isTopmost() && setWorkUrn))
+        if ((type.isAnchor() && setAnchorUrn) || (type.isTopmost() && setWorkUrn)) {
             return true;
+        }
 
         for (String structName : allowedTypes) {
             if (type.getName().equals(structName)) {
@@ -274,11 +274,10 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
         return null;
     }
 
-    private boolean replaceUrlsOrAddUrn(DocStruct logical)
-            throws JsonSyntaxException, ClientProtocolException, IllegalArgumentException, MetadataTypeNotAllowedException, IOException,
-            InterruptedException, WriteException, PreferencesException, SwapException, DAOException, SQLException, UrnDatabaseException {
+    private boolean replaceUrlsOrAddUrn(DocStruct logical) throws JsonSyntaxException, IllegalArgumentException, MetadataTypeNotAllowedException,
+            IOException, InterruptedException, WriteException, PreferencesException, SwapException, SQLException, UrnDatabaseException {
         boolean foundExistingUrn = false;
-        boolean successful = false;
+        boolean replaceSuccessful = false;
         String metsUrn = findExistingUrn(logical, metsUrnType);
         String modsUrn = findExistingUrn(logical, modsUrnType);
 
@@ -287,26 +286,26 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
             Metadata md = new Metadata(prefs.getMetadataTypeByName(metsUrnType));
             md.setValue(modsUrn);
             logical.addMetadata(md);
-            successful = true;
+            replaceSuccessful = true;
             log("Found MODS-URN, copy value to METS", LogType.INFO);
         }
 
         if (metsUrn != null) {
             foundExistingUrn = true;
             if (modsUrn != null && !metsUrn.equals(modsUrn)) {
-                log("There were different values for METS and MODS URN for the same Element",LogType.INFO);
+                log("There were different values for METS and MODS URN for the same Element", LogType.INFO);
             }
             if (metsUrn.startsWith(namespace)) {
-                successful = urnClient.replaceUrls(metsUrn, urls);
+                replaceSuccessful = urnClient.replaceUrls(metsUrn, urls);
 
-                if (!successful)
+                if (!replaceSuccessful) {
                     log("URN: " + metsUrn + " could not be updated", LogType.ERROR);
-                else {
-                    log("URN: " + metsUrn + " was updated successfully",LogType.INFO);
+                } else {
+                    log("URN: " + metsUrn + " was updated successfully", LogType.INFO);
                 }
             } else {
-                successful = true;
-                log("URN: " + metsUrn + "is not part of the namespace and will not be updated",LogType.INFO);
+                replaceSuccessful = true;
+                log("URN: " + metsUrn + "is not part of the namespace and will not be updated", LogType.INFO);
             }
 
         }
@@ -322,10 +321,9 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                 String myNewUrn;
                 Urn urn = urnGenerator.getUrnId(ppn, logical.getType());
                 if (urn.isOldEntry()) {
-                    myNewUrn = urn.getUrn();
                     if (urn.getUrn() == null) {
-                        log("The database entry with ID" + urn.getId() + " has no urn-value",LogType.ERROR);
-                        throw new IllegalArgumentException("The urn-value of the database entry with ID "+urn.getId()+" was null");
+                        log("The database entry with ID" + urn.getId() + " has no urn-value", LogType.ERROR);
+                        throw new IllegalArgumentException("The urn-value of the database entry with ID " + urn.getId() + " was null");
                     }
                 } else {
                     myNewUrn = urnGenerator.generateUrn(namespace, infix, urn);
@@ -334,7 +332,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                     int breakcount = 0;
                     while (urnGenerationMethod == UrnGenerationMethod.TIMESTAMP && urnGenerator.findDuplicate(myNewUrn)) {
                         TimeUnit.SECONDS.sleep(2);
-                        log("URN Generation to fast, had to wait a few seconds",LogType.DEBUG);
+                        log("URN Generation to fast, had to wait a few seconds", LogType.DEBUG);
                         myNewUrn = urnGenerator.generateUrn(namespace, infix, urn);
                         if (breakcount++ > 2) {
                             throw new IllegalArgumentException("URN: Tried to create an already existing URN 4 times");
@@ -345,21 +343,22 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                         if (myNewUrn.equals(urnClient.registerUrn(myNewUrn, urls))) {
                             urn.setUrn(myNewUrn);
                             if (!urnGenerator.writeUrnToDatabase(urn)) {
-                                log("The database entry with ID" + urn.getId() + " could not be updated with the new URN: " + urn.getUrn(),LogType.ERROR);
+                                log("The database entry with ID" + urn.getId() + " could not be updated with the new URN: " + urn.getUrn(),
+                                        LogType.ERROR);
                             } else {
-                                successful = true;
+                                replaceSuccessful = true;
                             }
                         }
                     } catch (Exception ex) {
-                        // if registering the urn fails for any reason 
+                        // if registering the urn fails for any reason
                         // and the entry is new delete it
-                        successful = false;
+                        replaceSuccessful = false;
                         if (!urn.isOldEntry()) {
                             urnGenerator.removeUrnId(urn.getId());
-                            log( "Couldn't register URN: " + urn.getUrn() + "with ID: " + urn.getId() + " was removed from database", LogType.ERROR);
+                            log("Couldn't register URN: " + urn.getUrn() + "with ID: " + urn.getId() + " was removed from database", LogType.ERROR);
                             throw ex;
                         } else {
-                            successful = true;
+                            replaceSuccessful = true;
                         }
                     }
                 }
@@ -376,18 +375,19 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                 }
 
                 log("URN: " + urn.getUrn() + " was created successfully", LogType.INFO);
-                        
 
-                // maybe it's better to save the mets file
-                // only once but risk loosing a URN?
-                step.getProzess().writeMetadataFile(ff);
-                successful = true;
+                replaceSuccessful = true;
             } else {
-                log("No URN was created because the metada type was not allowed",LogType.ERROR);
-                successful = false;
+                log("No URN was created because the metada type was not allowed", LogType.ERROR);
+                replaceSuccessful = false;
             }
         }
-        return successful;
+
+        if (replaceSuccessful) {
+            step.getProzess().writeMetadataFile(ff);
+        }
+
+        return replaceSuccessful;
     }
 
     @Override
@@ -406,7 +406,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
             VariableReplacer replacer = new VariableReplacer(ff.getDigitalDocument(), prefs, step.getProzess(), step);
 
             // create URL and add Value from Configuration
-            urls = new ArrayList<String>();
+            urls = new ArrayList<>();
             urls.add(replacer.replace(publicationUrl));
 
             setUrn(ds);
@@ -416,7 +416,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
             log(e.getMessage(), LogType.ERROR);
             successful = false;
         }
-        
+
         if (!successful) {
             log("Errors occured executing the URN Plugin", LogType.INFO);
             return PluginReturnValue.ERROR;

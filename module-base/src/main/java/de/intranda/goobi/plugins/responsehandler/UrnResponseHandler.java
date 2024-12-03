@@ -1,7 +1,7 @@
-package de.intranda.goobi.plugins.ResponseHandler;
+package de.intranda.goobi.plugins.responsehandler;
 
 import java.io.IOException;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -12,7 +12,7 @@ import org.apache.http.util.EntityUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
-import de.intranda.goobi.plugins.Messages.ErrorMessage;
+import de.intranda.goobi.plugins.messages.ErrorMessage;
 
 public abstract class UrnResponseHandler implements ResponseHandler<String> {
     protected int status;
@@ -32,7 +32,7 @@ public abstract class UrnResponseHandler implements ResponseHandler<String> {
     }
 
     @Override
-    public abstract String handleResponse(HttpResponse response) throws ClientProtocolException, IOException, JsonSyntaxException;
+    public abstract String handleResponse(HttpResponse response) throws IOException, JsonSyntaxException;
 
     /**
      * Helper Method of handleResponse() that can be used by the Children of an UrnResponseHandler
@@ -41,17 +41,18 @@ public abstract class UrnResponseHandler implements ResponseHandler<String> {
      * @throws IOException
      * @throws JsonSyntaxException
      */
-    protected void handleErrorStates() throws ClientProtocolException, IOException, JsonSyntaxException {
+    protected void handleErrorStates() throws IOException, JsonSyntaxException {
         if (status > 400 && status <= 429) {
 
             ErrorMessage error = null;
             if (entity != null) {
-                String jsonString = EntityUtils.toString(entity, Charset.forName("utf-8"));
+                String jsonString = EntityUtils.toString(entity, StandardCharsets.UTF_8);
                 error = gson.fromJson(jsonString, ErrorMessage.class);
             }
-            throw new ClientProtocolException(error == null ? ("Error: "+ status + " -> no response body received")
+            throw new ClientProtocolException(error == null ? ("Error: " + status + " -> no response body received")
                     : "Errorcode: " + error.getCode() + ": " + error.getDeveloperMessage());
-        } else
-            throw new ClientProtocolException("Error: "+ status + ": reason-> " + " unhandled error");
+        } else {
+            throw new ClientProtocolException("Error: " + status + ": reason-> " + " unhandled error");
+        }
     }
 }
