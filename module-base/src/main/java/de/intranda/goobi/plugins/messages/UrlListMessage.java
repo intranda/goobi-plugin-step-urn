@@ -1,4 +1,4 @@
-package de.intranda.goobi.plugins.Messages;
+package de.intranda.goobi.plugins.messages;
 
 import lombok.experimental.Accessors;
 import lombok.Getter;
