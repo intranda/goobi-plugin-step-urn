@@ -301,7 +301,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                 if (!replaceSuccessful) {
                     log("URN: " + metsUrn + " could not be updated", LogType.ERROR);
                 } else {
-                    log("URN: " + metsUrn + " was updated successfully", LogType.INFO);
+                    log("URN: " + metsUrn + " was updated successfully", LogType.DEBUG);
                 }
             } else {
                 replaceSuccessful = true;
