@@ -382,11 +382,6 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
                 replaceSuccessful = false;
             }
         }
-
-        if (replaceSuccessful) {
-            step.getProzess().writeMetadataFile(ff);
-        }
-
         return replaceSuccessful;
     }
 
@@ -410,6 +405,7 @@ public class UrnStepPlugin implements IStepPluginVersion2 {
             urls.add(replacer.replace(publicationUrl));
 
             setUrn(ds);
+            step.getProzess().writeMetadataFile(ff);
 
         } catch (ReadException | JsonException | PreferencesException | WriteException | IOException | IllegalArgumentException | InterruptedException
                 | SwapException | DAOException | MetadataTypeNotAllowedException | SQLException | JsonSyntaxException | UrnDatabaseException e) {
