@@ -2,7 +2,7 @@ package de.intranda.goobi.plugins.responsehandler;
 
 import java.io.IOException;
 
-import javax.json.JsonException;
+import jakarta.json.JsonException;
 
 import org.apache.http.HttpResponse;
 

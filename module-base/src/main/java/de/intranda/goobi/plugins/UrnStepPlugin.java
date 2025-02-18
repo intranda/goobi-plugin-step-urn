@@ -27,7 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import javax.json.JsonException;
+import jakarta.json.JsonException;
 
 import org.apache.commons.configuration.SubnodeConfiguration;
 import org.goobi.beans.Step;
