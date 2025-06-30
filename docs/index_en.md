@@ -42,77 +42,8 @@ This plugin uses a slightly modified table structure than the old URN plugin. Wh
 ## Configuration
 The configuration of the plugin is done via the configuration file `plugin_intranda_step_urn.xml` and can be adjusted during operation. The following is an example configuration file:
 
-```xml
-<config_plugin>
-	<!-- order of configuration is: 1.) project name and step name matches 2.) 
-		step name matches and project is * 3.) project name matches and step name 
-		is * 4.) project name and step name are * -->
+{{CONFIG_CONTENT}}
 
-	<config>
-		<!-- which projects to use for (can be more then one, otherwise use *) -->
-		<project>*</project>
-		<step>*</step>
-		
-		<!-- name of the API user -->
-		<apiUser>user</apiUser>
-
-		<!-- password of the API user -->
-		<apiPassword>password</apiPassword>
-
-		<!-- URI of the URN API, must use https -->
-		<apiUri>https://api.nbn-resolving.org/v2/</apiUri>
-
-		<!-- namespace in which new URNs shall be created -->
-		<!-- example urn:nbn:de:{SIGEL} -->
-		<namespace>urn:nbn:de:{SIGEL}</namespace>
-
-		<!-- infix that you want to use (optional) -->
-		<infix></infix>
-		
-		<!-- optional Element, 
-			increment if you want to use incrementation (300,301,302...) to generate the part after the infix
-			timestamp if you want to use a time stamp (20420923063015) to generate the part after the infix
-			default method is increment!
-		  -->
-		<generationMethod>increment</generationMethod>
-		
-		<!-- optional Element, 
-			false if you don't want URNs with a Checksum
-			true if you want URNs with a Checksum
-		 -->
-		<checksum>false</checksum>
-	
-		<!-- example URN urn:nbn:de:{SIGIL}-goobi-20220404123 -->
-
-		<!--target url the newly generated urn will forward to. {pi.urn} will be 
-			replaced with the newly minted urn -->
-		<url>https://viewer.example.org/viewer/resolver?urn={pi.urn}</url>
-
-		<!--Generate URN for the work (e.g. for Monograph, Manuscript, Volume, etc.)  -->
-		<work>true</work>
-
-		<!--Generate URN for the anchor Element -->
-		<anchor>false</anchor>
-
-		<!--Elements listed here will receive a URN. If work is set to true the 
-			work element will receive a URN even if it is not listed here -->
-		<!--
-		<allowed>
-			<type>Chapter</type>
-		</allowed>
-		-->
-		<!-- metadata name for urns in METS-bloc "_urn" -->
-		<typeNameMets>_urn</typeNameMets>
-
-		<!--metadata name for URNs in MODS-bloc. -->
-		<typeNameMods>URN</typeNameMods>
-
-		<!--Shall the plugin create URNs in the MODS-bloc. The rule set entries 
-			of certain elements may have to be altered, if you wish to use this -->
-		<createModsUrns>false</createModsUrns>
-	</config>
-</config_plugin>
-```
 
 | Parameter | Explanation |
 | :--- | :--- |
