@@ -56,7 +56,7 @@ The configuration of the plugin is done via the configuration file `plugin_intra
 | `infix` | Infix to be inserted in the generated URNs after the namespace. A new URN would have the form `{namespace}{infix}{generatedValue}`. |
 | `generationMethod` | The plugin currently offers 2 options for generating a URN. `timestamp` and `increment`. The default value is `increment`. If you use `timestamp`, the time of generation of the URN will be appended after the infix in the form `2022-12-23-12-00-35`. If you choose increment, a counter (1,2, ...301,302,..) is used. |
 | `checksum` | Here you can specify whether a check digit should be generated (`true`) or not (`false`). |
-| `url`   | The URL under which the digitised work will be available in the future. As a rule, the publication URL will follow a pattern, e.g. `https://viewer.example.org/viewer/resolver?urn={pi.urn}`. The placeholder {pi.urn} will be replaced by the plugin with the new URN. |
+| `url`   | The URL under which the digitised work will be available in the future. As a rule, the publication URL will follow a pattern, e.g. `https://viewer.example.org/viewer/resolver?urn={pi.urn}`. The placeholder `{pi.urn}` will be replaced by the plugin with the new URN. |
 | `work` | Switch that activates the setting of work URNs (Monograph, Manuscript, Volume, etc.). |
 | `anchor` | Switch that activates the setting of URNs for the anchor element. |
 | `allowed -> type` | Here you can list elements for which a URN is to be generated. For each element, a `<type>ElementName</type>` entry must be created in the `<allowed>` element. <br/>**Note:** If you set anchor or work to true, the anchor element and the work element will receive a URN even if their type names are not listed. |
