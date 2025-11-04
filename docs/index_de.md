@@ -3,6 +3,10 @@ title: Erzeugung von Uniform Resource Names (URN)
 identifier: intranda_step_urn
 published: true
 description: Goobi Step Plugin für die Erstellung von Uniform Resource Names (URN).
+keywords:
+    - Goobi workflow
+    - Plugin
+    - Step Plugin
 ---
 ## Einführung
 Die vorliegende Dokumentation beschreibt die Installation, die Konfiguration und den Einsatz des Step Plugins für die Generierung von Uniform Resource Names in Goobi workflow.
