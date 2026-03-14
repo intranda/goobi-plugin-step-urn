@@ -40,7 +40,7 @@ Dieses Plugin wird in den Workflow so integriert, dass es automatisch ausgeführ
 
 
 ## Hinweis
-Dieses Plugin verwendet eine leicht abgewandelte Tabellenstruktur als das alte URN Plugin. Bei einem Update muss sichergestellt werden, dass die Spalte urn in der entsprechenden Tabelle existiert. Des weiteren muss sichergestellt werden, dass z.B. für Ankerelemente, deren URN vor der Aktualisierung generiert wurde, auch ein URN in der Datenbank steht.
+Dieses Plugin verwendet eine leicht abgewandelte Tabellenstruktur als das alte URN Plugin. Bei einem Update muss sichergestellt werden, dass die Spalte urn in der entsprechenden Tabelle existiert. Des Weiteren muss sichergestellt werden, dass z.B. für Ankerelemente, deren URN vor der Aktualisierung generiert wurde, auch ein URN in der Datenbank steht.
 
 
 ## Konfiguration
